@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  IconHome2,
+  IconLayoutDashboard,
   IconClipboardList,
   IconChartLine,
   IconUser,
 } from "@tabler/icons-react";
 
 const TABS = [
-  { href: "/", label: "Today", icon: IconHome2 },
+  { href: "/dashboard", label: "Dashboard", icon: IconLayoutDashboard },
   { href: "/programs", label: "Programs", icon: IconClipboardList },
   { href: "/progress", label: "Progress", icon: IconChartLine },
   { href: "/profile", label: "Profile", icon: IconUser },
@@ -22,9 +22,10 @@ export default function TabBar() {
   return (
     <nav className="fixed bottom-0 left-1/2 z-20 flex h-16 w-full max-w-md -translate-x-1/2 items-center justify-around border-t border-black bg-rubber">
       {TABS.map(({ href, label, icon: Icon }) => {
-        // Execution runner lives under "/" but shouldn't fight Today for the active state
         const isActive =
-          href === "/" ? pathname === "/" || pathname.startsWith("/workout") : pathname.startsWith(href);
+          href === "/dashboard"
+            ? pathname === "/dashboard" || pathname.startsWith("/workout") || pathname === "/"
+            : pathname.startsWith(href);
         return (
           <Link
             key={href}

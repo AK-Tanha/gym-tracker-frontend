@@ -6,16 +6,18 @@ export type PlannedExercise = {
   muscleGroup: string;
   type: ExerciseType;
   groupId: string | null;
-  groupLabel?: string; // e.g. "SS-1", shown as a small tag in lists
+  groupLabel?: string;
   sets: number;
   reps: number;
-  restBetweenSets: number; // seconds
-  restBetweenReps: number; // seconds, only relevant inside a group
+  weight: number;
+  restBetweenSets: number;
+  restBetweenReps: number;
 };
 
 export type WorkoutDay = {
   dayLabel: string;
-  dayOfWeek: number; // 0 = Sunday .. 6 = Saturday
+  category?: string;
+  dayOfWeek: number;
   isRestDay: boolean;
   exercises: PlannedExercise[];
 };
@@ -39,6 +41,8 @@ export type ExecutionStep =
       setNumber: number;
       totalSets: number;
       groupLabel?: string;
+      weight?: number;
+      reps?: number;
       lastTime?: string; // e.g. "57.5kg x 8", shown as a reference
     }
   | {

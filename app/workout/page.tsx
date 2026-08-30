@@ -52,7 +52,7 @@ export default function WorkoutRunnerPage() {
           onDone={() => setIndex((i) => i + 1)}
         />
       ) : (
-        <RestStep step={step} onDone={() => setIndex((i) => i + 1)} />
+        <RestStep key={index} step={step} onDone={() => setIndex((i) => i + 1)} />
       )}
     </div>
   );
@@ -79,10 +79,10 @@ function ExerciseStep({
         </h1>
         <p className="mb-6.5 text-xs text-chalk-faint">{step.muscleGroup}</p>
         <p className="mb-1.5 font-mono text-[44px] font-bold text-chalk">
-          60<span className="text-xl text-chalk-faint">kg</span> × 8
+          {step.weight}<span className="text-xl text-chalk-faint">kg</span> × {step.reps}
           <span className="text-xl text-chalk-faint">reps</span>
         </p>
-        <p className="mb-7 text-xs text-chalk-faint">Last time: 57.5kg × 8</p>
+        <p className="mb-7 text-xs text-chalk-faint">Last time: {step.lastTime}</p>
         <button
           onClick={onDone}
           className="w-full rounded-[10px] bg-plate-green py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white"
@@ -119,11 +119,6 @@ function RestStep({
   const [secondsLeft, setSecondsLeft] = useState(step.seconds);
   const [paused, setPaused] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    setSecondsLeft(step.seconds);
-    setPaused(false);
-  }, [step]);
 
   useEffect(() => {
     if (paused) return;

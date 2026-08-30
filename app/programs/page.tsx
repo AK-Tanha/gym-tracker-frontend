@@ -1,6 +1,11 @@
+"use client";
+
 import { programs, myWorkouts } from "@/lib/mockData";
+import { useState } from "react";
 
 export default function ProgramsPage() {
+  const [activeProgram, setActiveProgram] = useState<string | null>("mw1");
+
   return (
     <div className="px-5 pt-2">
       <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-chalk-faint">
@@ -22,8 +27,15 @@ export default function ProgramsPage() {
               <span className="font-mono text-[11px] text-chalk-faint">
                 {p.daysPerWeek} days/week
               </span>
-              <button className="rounded-lg border border-plate-blue px-3.5 py-1.5 text-xs font-semibold text-[#7FB2E8]">
-                Use program
+              <button
+                onClick={() => setActiveProgram(p.id)}
+                className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold ${
+                  activeProgram === p.id
+                    ? "bg-plate-green text-white"
+                    : "border border-plate-blue text-[#7FB2E8]"
+                }`}
+              >
+                {activeProgram === p.id ? "Active" : "Use program"}
               </button>
             </div>
           </div>
@@ -51,8 +63,15 @@ export default function ProgramsPage() {
               <span className="font-mono text-[11px] text-chalk-faint">
                 Active plan
               </span>
-              <button className="rounded-lg border border-plate-blue px-3.5 py-1.5 text-xs font-semibold text-[#7FB2E8]">
-                Edit
+              <button
+                onClick={() => setActiveProgram(w.id)}
+                className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold ${
+                  activeProgram === w.id
+                    ? "bg-plate-green text-white"
+                    : "border border-plate-blue text-[#7FB2E8]"
+                }`}
+              >
+                {activeProgram === w.id ? "Active" : "Edit"}
               </button>
             </div>
           </div>

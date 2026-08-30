@@ -1,10 +1,8 @@
 import { WorkoutDay, Program } from "./types";
 
-// Placeholder data standing in for GET /workouts/today until the
-// Express API is wired up. Shape matches the WorkoutDay type exactly
-// so swapping in a real fetch later is a drop-in replacement.
 export const todaysWorkout: WorkoutDay = {
   dayLabel: "Chest + Triceps",
+  category: "Push day",
   dayOfWeek: 0,
   isRestDay: false,
   exercises: [
@@ -16,6 +14,7 @@ export const todaysWorkout: WorkoutDay = {
       groupId: null,
       sets: 4,
       reps: 8,
+      weight: 60,
       restBetweenSets: 90,
       restBetweenReps: 0,
     },
@@ -28,6 +27,7 @@ export const todaysWorkout: WorkoutDay = {
       groupLabel: "SS-1",
       sets: 3,
       reps: 10,
+      weight: 30,
       restBetweenSets: 90,
       restBetweenReps: 20,
     },
@@ -40,6 +40,7 @@ export const todaysWorkout: WorkoutDay = {
       groupLabel: "SS-1",
       sets: 3,
       reps: 12,
+      weight: 20,
       restBetweenSets: 90,
       restBetweenReps: 20,
     },
@@ -51,6 +52,7 @@ export const todaysWorkout: WorkoutDay = {
       groupId: null,
       sets: 3,
       reps: 12,
+      weight: 25,
       restBetweenSets: 60,
       restBetweenReps: 0,
     },
@@ -62,6 +64,7 @@ export const todaysWorkout: WorkoutDay = {
       groupId: null,
       sets: 3,
       reps: 12,
+      weight: 20,
       restBetweenSets: 60,
       restBetweenReps: 0,
     },
@@ -69,13 +72,13 @@ export const todaysWorkout: WorkoutDay = {
 };
 
 export const weekStrip = [
-  { label: "M", isWorkout: true },
-  { label: "T", isWorkout: false },
-  { label: "W", isWorkout: true },
-  { label: "T", isWorkout: false },
-  { label: "F", isWorkout: true },
-  { label: "S", isWorkout: false },
-  { label: "S", isWorkout: true }, // today
+  { label: "M", dayOfWeek: 1, isWorkout: true },
+  { label: "T", dayOfWeek: 2, isWorkout: false },
+  { label: "W", dayOfWeek: 3, isWorkout: true },
+  { label: "T", dayOfWeek: 4, isWorkout: false },
+  { label: "F", dayOfWeek: 5, isWorkout: true },
+  { label: "S", dayOfWeek: 6, isWorkout: false },
+  { label: "S", dayOfWeek: 0, isWorkout: true },
 ];
 
 export const programs: Program[] = [
@@ -118,7 +121,7 @@ export const progressStats = {
   totalVolumeTonnes: 38.2,
   newPRs: 3,
   weekStreak: [true, false, true, true, true, false, true],
-  benchProgression: [55, 62, 68, 80], // relative bar heights, %
+  benchProgression: [55, 62, 68, 80],
   recentPRs: [
     { name: "Barbell bench press", when: "2 days ago", value: "62.5kg x 8" },
     { name: "Deadlift", when: "6 days ago", value: "120kg x 5" },
