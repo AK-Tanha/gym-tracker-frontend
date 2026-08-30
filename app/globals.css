@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  --iron: #1b1b1d;
+  --rubber: #242528;
+  --rubber-2: #2d2f33;
+  --chalk: #f3f1eb;
+  --chalk-dim: #9a978e;
+  --chalk-faint: #6e6c66;
+  --plate-red: #d0202e;
+  --plate-blue: #1e5aa8;
+  --plate-blue-bg: #152b47;
+  --plate-yellow: #e8b923;
+  --plate-green: #2e8b57;
+}
+
+@theme inline {
+  --color-iron: var(--iron);
+  --color-rubber: var(--rubber);
+  --color-rubber-2: var(--rubber-2);
+  --color-chalk: var(--chalk);
+  --color-chalk-dim: var(--chalk-dim);
+  --color-chalk-faint: var(--chalk-faint);
+  --color-plate-red: var(--plate-red);
+  --color-plate-blue: var(--plate-blue);
+  --color-plate-blue-bg: var(--plate-blue-bg);
+  --color-plate-yellow: var(--plate-yellow);
+  --color-plate-green: var(--plate-green);
+
+  --font-display: var(--font-oswald);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  background: var(--iron);
+  color: var(--chalk);
+}
