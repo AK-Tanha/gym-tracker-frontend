@@ -1,10 +1,38 @@
 "use client";
 
-import { programs, myWorkouts } from "@/lib/mockData";
+import { useApi, api } from "@/lib/api";
+import { Program } from "@/lib/types";
 import { useState } from "react";
 
 export default function ProgramsPage() {
+  const { data, loading, mutate } = useApi<{ programs: Program[]; myWorkouts: Program[] }>("/api/programs");
   const [activeProgram, setActiveProgram] = useState<string | null>("mw1");
+
+  if (loading || !data) {
+    return (
+      <div className="flex h-full items-center justify-center px-5 pt-2">
+        <p className="text-sm text-chalk-faint">Loading…</p>
+      </div>
+    );
+  }
+
+  const { programs, myWorkouts } = data;
+
+  const activate = async (id: string, isOwn: boolean) => {
+    setActiveProgram(id);
+    const list = isOwn ? myWorkouts : programs;
+    const updates: Program[] = list.map((p) => ({
+      ...p,
+      isActive: p.id === id,
+    }));
+    const payload = isOwn ? { programs, myWorkouts: updates } : { programs: updates, myWorkouts };
+    try {
+      await api.post("/api/programs", payload);
+      mutate(payload);
+    } catch {
+      // ignore — UI state already updated optimistically
+    }
+  };
 
   return (
     <div className="px-5 pt-2">
@@ -28,14 +56,14 @@ export default function ProgramsPage() {
                 {p.daysPerWeek} days/week
               </span>
               <button
-                onClick={() => setActiveProgram(p.id)}
+                onClick={() => activate(p.id, false)}
                 className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold ${
-                  activeProgram === p.id
+                  activeProgram === p.id || p.isActive
                     ? "bg-plate-green text-white"
                     : "border border-plate-blue text-[#7FB2E8]"
                 }`}
               >
-                {activeProgram === p.id ? "Active" : "Use program"}
+                {activeProgram === p.id || p.isActive ? "Active" : "Use program"}
               </button>
             </div>
           </div>
@@ -64,14 +92,14 @@ export default function ProgramsPage() {
                 Active plan
               </span>
               <button
-                onClick={() => setActiveProgram(w.id)}
+                onClick={() => activate(w.id, true)}
                 className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold ${
-                  activeProgram === w.id
+                  activeProgram === w.id || w.isActive
                     ? "bg-plate-green text-white"
                     : "border border-plate-blue text-[#7FB2E8]"
                 }`}
               >
-                {activeProgram === w.id ? "Active" : "Edit"}
+                {activeProgram === w.id || w.isActive ? "Active" : "Edit"}
               </button>
             </div>
           </div>

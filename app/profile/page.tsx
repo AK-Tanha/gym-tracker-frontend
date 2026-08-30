@@ -10,11 +10,19 @@ import {
   IconChevronRight,
 } from "@tabler/icons-react";
 import { useState } from "react";
+import { useApi, api } from "@/lib/api";
+
+type Profile = {
+  name: string;
+  memberSince: string;
+  initials: string;
+  reminders: boolean;
+  units: string;
+  schedule: string;
+};
 
 export default function ProfilePage() {
-  const [reminders, setReminders] = useState(true);
-  const [units, setUnits] = useState("kg");
-  const [schedule, setSchedule] = useState("Weekday");
+  const { data, mutate } = useApi<Profile>("/api/profile");
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -22,17 +30,39 @@ export default function ProfilePage() {
     setTimeout(() => setToast(null), 2000);
   };
 
+  const profile = data ?? {
+    name: "AK Tanha",
+    memberSince: "Jan 2026",
+    initials: "AK",
+    reminders: true,
+    units: "kg",
+    schedule: "Weekday",
+  };
+
+  const update = async (patch: Partial<Profile>, message?: string) => {
+    const next = { ...profile, ...patch };
+    mutate(next);
+    try {
+      await api.put("/api/profile", patch);
+    } catch {
+      // ignore — UI state already updated optimistically
+    }
+    if (message) showToast(message);
+  };
+
   return (
     <div className="px-5 pt-2">
       <div className="my-3.5 flex items-center gap-3.5">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-plate-blue-bg font-display text-xl font-semibold text-[#7FB2E8]">
-          AK
+          {profile.initials}
         </div>
         <div>
           <p className="font-display text-[19px] font-semibold text-chalk">
-            AK Tanha
+            {profile.name}
           </p>
-          <p className="mt-0.5 text-xs text-chalk-faint">Member since Jan 2026</p>
+          <p className="mt-0.5 text-xs text-chalk-faint">
+            Member since {profile.memberSince}
+          </p>
         </div>
       </div>
 
@@ -50,20 +80,22 @@ export default function ProfilePage() {
       <Row
         icon={IconBell}
         label="Workout reminders"
-        value={reminders ? "On" : "Off"}
-        onClick={() => setReminders((r) => !r)}
+        value={profile.reminders ? "On" : "Off"}
+        onClick={() => update({ reminders: !profile.reminders })}
       />
       <Row
         icon={IconRuler2}
         label="Units"
-        value={units}
-        onClick={() => setUnits(units === "kg" ? "lbs" : "kg")}
+        value={profile.units}
+        onClick={() => update({ units: profile.units === "kg" ? "lbs" : "kg" })}
       />
       <Row
         icon={IconCalendarTime}
         label="Schedule type"
-        value={schedule}
-        onClick={() => setSchedule(schedule === "Weekday" ? "Weekend" : "Weekday")}
+        value={profile.schedule}
+        onClick={() =>
+          update({ schedule: profile.schedule === "Weekday" ? "Weekend" : "Weekday" })
+        }
       />
 
       <SectionLabel>Account</SectionLabel>

@@ -2,11 +2,23 @@
 
 import Link from "next/link";
 import { IconPlayerPlayFilled, IconArrowRight } from "@tabler/icons-react";
-import { todaysWorkout, weekStrip, progressStats, myWorkouts } from "@/lib/mockData";
+import { weekStrip } from "@/lib/mockData";
+import { useApi } from "@/lib/api";
+import { WorkoutDay, Program } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 import { useRouter } from "next/navigation";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+type ProgressStats = {
+  workoutsDone: number;
+  streakDays: number;
+  totalVolumeTonnes: number;
+  newPRs: number;
+  weekStreak: boolean[];
+  benchProgression: number[];
+  recentPRs: { name: string; when: string; value: string }[];
+};
 
 function StatCard({
   label,
@@ -34,10 +46,26 @@ function StatCard({
 
 export default function DashboardPage() {
   const router = useRouter();
-  const totalSets = todaysWorkout.exercises.reduce((sum, e) => sum + e.sets, 0);
+  const workout = useApi<WorkoutDay>("/api/workouts");
+  const stats = useApi<ProgressStats>("/api/progress");
+  const programsData = useApi<{ programs: Program[]; myWorkouts: Program[] }>("/api/programs");
+
+  if (workout.loading || stats.loading || programsData.loading) {
+    return (
+      <div className="flex h-full items-center justify-center px-5 pt-2">
+        <p className="text-sm text-chalk-faint">Loading…</p>
+      </div>
+    );
+  }
+
+  const todaysWorkout = workout.data ?? ({} as WorkoutDay);
+  const progressStats = stats.data ?? ({} as ProgressStats);
+  const myWorkouts = programsData.data?.myWorkouts ?? [];
+
+  const totalSets = todaysWorkout.exercises?.reduce((sum, e) => sum + e.sets, 0) ?? 0;
   const estMinutes = Math.round(totalSets * 3.2);
-  const todayName = DAY_NAMES[todaysWorkout.dayOfWeek];
-  const queue = flattenDay(todaysWorkout.exercises);
+  const todayName = DAY_NAMES[todaysWorkout.dayOfWeek] ?? "Today";
+  const queue = flattenDay(todaysWorkout.exercises ?? []);
   const completedSets = queue.filter((s) => s.type === "exercise").length;
 
   return (
@@ -56,7 +84,7 @@ export default function DashboardPage() {
             </p>
           </div>
           <span className="rounded-md bg-plate-blue-bg px-2.5 py-1 text-[11px] font-semibold text-[#7FB2E8]">
-            {todaysWorkout.exercises.length} exercises
+            {todaysWorkout.exercises?.length ?? 0} exercises
           </span>
         </div>
       </div>
@@ -64,23 +92,23 @@ export default function DashboardPage() {
       <div className="mb-5 grid grid-cols-2 gap-2.5">
         <StatCard
           label="Workouts done"
-          value={String(progressStats.workoutsDone)}
+          value={String(progressStats.workoutsDone ?? 0)}
           icon={<span className="text-[16px]">🔥</span>}
         />
         <StatCard
           label="Current streak"
-          value={`${progressStats.streakDays} days`}
+          value={`${progressStats.streakDays ?? 0} days`}
           accent
           icon={<span className="text-[16px]">⚡</span>}
         />
         <StatCard
           label="Volume"
-          value={`${progressStats.totalVolumeTonnes}t`}
+          value={`${progressStats.totalVolumeTonnes ?? 0}t`}
           icon={<span className="text-[16px]">🏋️</span>}
         />
         <StatCard
           label="New PRs"
-          value={String(progressStats.newPRs)}
+          value={String(progressStats.newPRs ?? 0)}
           accent
           icon={<span className="text-[16px]">🪜</span>}
         />
@@ -90,18 +118,18 @@ export default function DashboardPage() {
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs text-chalk-faint">This week</p>
           <span className="font-mono text-[11px] text-[#5DCAA5]">
-            {progressStats.weekStreak.filter(Boolean).length}/7 days
+            {(progressStats.weekStreak ?? []).filter(Boolean).length}/7 days
           </span>
         </div>
         <div className="flex gap-1.5">
-          {progressStats.weekStreak.map((done, i) => (
+          {(progressStats.weekStreak ?? []).map((done, i) => (
             <div key={i} className="flex-1">
               <div
                 className={`h-1.5 rounded-full ${done ? "bg-plate-green" : "bg-rubber-2"}`}
                 style={{ height: 24 }}
               />
               <p className="mt-1 text-center font-mono text-[9px] text-chalk-faint">
-                {weekStrip[i].label}
+                {weekStrip[i]?.label ?? ""}
               </p>
             </div>
           ))}
@@ -121,7 +149,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="mb-4 flex flex-col gap-2">
-          {todaysWorkout.exercises.map((ex) => (
+          {(todaysWorkout.exercises ?? []).map((ex) => (
             <div
               key={ex.id}
               className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
@@ -152,7 +180,7 @@ export default function DashboardPage() {
       <div className="mb-5 rounded-[14px] bg-rubber p-4">
         <p className="mb-3 text-xs text-chalk-faint">Bench press · working weight (kg)</p>
         <div className="flex h-[90px] items-end gap-2">
-          {progressStats.benchProgression.map((h, i) => (
+          {(progressStats.benchProgression ?? []).map((h, i) => (
             <div key={i} className="relative flex-1">
               <div
                 className="rounded-t bg-plate-blue"
@@ -170,7 +198,7 @@ export default function DashboardPage() {
         Recent PRs
       </div>
       <div className="flex flex-col gap-2">
-        {progressStats.recentPRs.map((pr) => (
+        {(progressStats.recentPRs ?? []).map((pr) => (
           <div
             key={pr.name}
             className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
@@ -193,7 +221,7 @@ export default function DashboardPage() {
         Programs
       </div>
       <div className="flex flex-col gap-3">
-        {progressStats.weekStreak.length > 0 && (
+        {myWorkouts.length > 0 && (
           <div className="rounded-[14px] bg-rubber px-4.5 py-4">
             <p className="mb-1 font-display text-[17px] font-semibold text-chalk">
               {myWorkouts[0].name}
@@ -213,4 +241,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

@@ -3,16 +3,30 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { IconX } from "@tabler/icons-react";
-import { todaysWorkout } from "@/lib/mockData";
+import { useApi } from "@/lib/api";
+import { WorkoutDay } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 
 export default function WorkoutRunnerPage() {
   const router = useRouter();
-  const queue = useMemo(() => flattenDay(todaysWorkout.exercises), []);
+  const workout = useApi<WorkoutDay>("/api/workouts");
+  const todaysWorkout = workout.data;
+  const queue = useMemo(
+    () => (todaysWorkout ? flattenDay(todaysWorkout.exercises) : []),
+    [todaysWorkout]
+  );
   const [index, setIndex] = useState(0);
 
   const step = queue[index];
   const nextStep = queue[index + 1];
+
+  if (workout.loading) {
+    return (
+      <div className="flex h-full items-center justify-center px-5 pt-2">
+        <p className="text-sm text-chalk-faint">Loading workout…</p>
+      </div>
+    );
+  }
 
   if (!step) {
     // Ran off the end of the queue: session complete.
@@ -22,13 +36,13 @@ export default function WorkoutRunnerPage() {
           Workout complete
         </h1>
         <p className="mb-6 text-sm text-chalk-faint">
-          Nice work — {todaysWorkout.dayLabel} logged.
+          Nice work — {todaysWorkout?.dayLabel ?? "Today"} logged.
         </p>
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/dashboard")}
           className="rounded-[10px] bg-plate-green px-6 py-3 font-display text-sm font-semibold uppercase tracking-wide text-white"
         >
-          Back to today
+          Back to dashboard
         </button>
       </div>
     );
@@ -38,9 +52,9 @@ export default function WorkoutRunnerPage() {
     <div className="px-5 pt-2">
       <div className="mb-6 flex items-center justify-between">
         <span className="font-mono text-xs text-chalk-faint">
-          {todaysWorkout.dayLabel.toUpperCase()}
+          {(todaysWorkout?.dayLabel ?? "").toUpperCase()}
         </span>
-        <button onClick={() => router.push("/")} aria-label="End workout">
+        <button onClick={() => router.push("/dashboard")} aria-label="End workout">
           <IconX size={20} className="text-chalk-faint" />
         </button>
       </div>

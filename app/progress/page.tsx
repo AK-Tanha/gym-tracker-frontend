@@ -1,7 +1,29 @@
-import { progressStats } from "@/lib/mockData";
+"use client";
+
+import { useApi } from "@/lib/api";
+
+type ProgressStats = {
+  workoutsDone: number;
+  streakDays: number;
+  totalVolumeTonnes: number;
+  newPRs: number;
+  weekStreak: boolean[];
+  benchProgression: number[];
+  recentPRs: { name: string; when: string; value: string }[];
+};
 
 export default function ProgressPage() {
-  const s = progressStats;
+  const { data, loading } = useApi<ProgressStats>("/api/progress");
+
+  if (loading || !data) {
+    return (
+      <div className="flex h-full items-center justify-center px-5 pt-2">
+        <p className="text-sm text-chalk-faint">Loading…</p>
+      </div>
+    );
+  }
+
+  const s = data;
 
   return (
     <div className="px-5 pt-2">
