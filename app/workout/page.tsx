@@ -5,16 +5,23 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { IconX } from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
-import { WorkoutDay } from "@/lib/types";
+import { Program, WorkoutDay } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 import LogSetForm, { LoggedSet } from "@/components/forms/LogSetForm";
 
 export default function WorkoutRunnerPage() {
   const router = useRouter();
-  const { data: todaysWorkout, isLoading } = useQuery<WorkoutDay>({
-    queryKey: queryKeys.workoutDay(0),
-    queryFn: () => api.get<WorkoutDay>("/api/workouts"),
+  const { data: activeProgram, isLoading } = useQuery<Program>({
+    queryKey: queryKeys.activeProgram,
+    queryFn: () => api.get<Program>("/api/programs/active"),
   });
+
+  const todaysWorkout = useMemo<WorkoutDay | undefined>(() => {
+    if (!activeProgram?.workoutDays?.length) return undefined;
+    const todayDow = new Date().getDay();
+    const day = activeProgram.workoutDays.find((d) => d.dayOfWeek === todayDow);
+    return day ?? activeProgram.workoutDays[0];
+  }, [activeProgram]);
   const queue = useMemo(
     () => (todaysWorkout ? flattenDay(todaysWorkout.exercises) : []),
     [todaysWorkout]
@@ -30,9 +37,9 @@ export default function WorkoutRunnerPage() {
       const entries = sets.map((s, i) => ({
         id: `ls-${Date.now()}-${i}`,
         exerciseId: "",
-        exerciseName: "",
-        muscleGroup: "",
-        setNumber: 0,
+        exerciseName: s.exerciseName ?? "",
+        muscleGroup: s.muscleGroup ?? "",
+        setNumber: s.setNumber ?? 0,
         weight: s.weight,
         reps: s.reps,
         rpe: s.rpe,
@@ -50,11 +57,16 @@ export default function WorkoutRunnerPage() {
 
   const handleSetLogged = useCallback(
     (set: LoggedSet) => {
+      if (step?.type === "exercise") {
+        set.exerciseName = step.exerciseName;
+        set.muscleGroup = step.muscleGroup;
+        set.setNumber = step.setNumber;
+      }
       loggedSetsRef.current.push(set);
       setLogging(false);
       setIndex((i) => i + 1);
     },
-    []
+    [step]
   );
 
   useEffect(() => {

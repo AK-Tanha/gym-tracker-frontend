@@ -29,6 +29,7 @@ export type Program = {
   daysPerWeek: number;
   isOwn?: boolean;
   isActive?: boolean;
+  workoutDays?: WorkoutDay[];
 };
 
 // One item in the flattened execution queue for a session.

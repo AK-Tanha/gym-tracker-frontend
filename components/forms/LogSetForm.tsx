@@ -8,6 +8,9 @@ export type LoggedSet = {
   reps: number;
   rpe: number | null;
   notes: string;
+  exerciseName?: string;
+  muscleGroup?: string;
+  setNumber?: number;
 };
 
 const EMPTY: LoggedSet = { weight: 0, reps: 0, rpe: null, notes: "" };

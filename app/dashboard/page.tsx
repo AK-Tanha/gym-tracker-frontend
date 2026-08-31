@@ -8,6 +8,7 @@ import { WorkoutDay, Program } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useMemo } from "react";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const WEEK_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -50,10 +51,16 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const firstName = (session?.user?.name ?? "Athlete").split(" ")[0];
-  const { data: todaysWorkout, isLoading: workoutLoading } = useQuery<WorkoutDay>({
-    queryKey: queryKeys.workoutDay(0),
-    queryFn: () => api.get<WorkoutDay>("/api/workouts"),
+  const { data: activeProgram, isLoading: programLoading } = useQuery<Program>({
+    queryKey: queryKeys.activeProgram,
+    queryFn: () => api.get<Program>("/api/programs/active"),
   });
+  const todaysWorkout = useMemo<WorkoutDay | undefined>(() => {
+    if (!activeProgram?.workoutDays?.length) return undefined;
+    const todayDow = new Date().getDay();
+    const day = activeProgram.workoutDays.find((d) => d.dayOfWeek === todayDow);
+    return day ?? activeProgram.workoutDays[0];
+  }, [activeProgram]);
   const { data: progressStats, isLoading: statsLoading } = useQuery<ProgressStats>({
     queryKey: queryKeys.progress,
     queryFn: () => api.get<ProgressStats>("/api/progress"),
@@ -65,7 +72,7 @@ export default function DashboardPage() {
     queryFn: () => api.get("/api/programs"),
   });
 
-  if (workoutLoading || statsLoading || programsLoading) {
+  if (programLoading || statsLoading || programsLoading) {
     return (
       <div className="flex h-full items-center justify-center px-5 pt-2">
         <p className="text-sm text-chalk-faint">Loading…</p>
@@ -243,13 +250,13 @@ export default function DashboardPage() {
         Programs
       </div>
       <div className="flex flex-col gap-3">
-        {myWorkouts.length > 0 && (
+        {activeProgram && (
           <div className="rounded-[14px] bg-rubber px-4.5 py-4">
             <p className="mb-1 font-display text-[17px] font-semibold text-chalk">
-              {myWorkouts[0].name}
+              {activeProgram.name}
             </p>
             <p className="mb-3.5 text-xs leading-relaxed text-chalk-faint">
-              {myWorkouts[0].description}
+              {activeProgram.description}
             </p>
             <Link
               href="/programs"
@@ -258,6 +265,14 @@ export default function DashboardPage() {
               View all programs →
             </Link>
           </div>
+        )}
+        {!activeProgram && myWorkouts.length === 0 && (
+          <Link
+            href="/programs"
+            className="rounded-[14px] bg-rubber px-4.5 py-4 text-xs text-chalk-faint"
+          >
+            Create your first program →
+          </Link>
         )}
       </div>
     </div>

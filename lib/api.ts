@@ -28,10 +28,9 @@ export const api = {
 };
 
 export const queryKeys = {
-  workouts: ["workouts"] as const,
-  workoutDay: (day: number | string) => ["workouts", String(day)] as const,
   programs: ["programs"] as const,
   program: (id: string) => ["programs", id] as const,
+  activeProgram: ["programs", "active"] as const,
   profile: ["profile"] as const,
   progress: ["progress"] as const,
 };
