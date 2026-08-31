@@ -46,8 +46,7 @@ export default function ExerciseForm({
     setError(null);
   };
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = () => {
     if (!draft.name.trim()) {
       setError("Exercise name is required.");
       return;
@@ -72,7 +71,7 @@ export default function ExerciseForm({
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <TextInput
         label="Exercise name"
         placeholder="e.g. Barbell bench press"
@@ -142,10 +141,10 @@ export default function ExerciseForm({
         />
       )}
       <FieldError error={error} />
-      <FormButton type="submit" variant="success" className="mt-1">
+      <FormButton type="button" variant="success" className="mt-1" onClick={submit}>
         <IconPlus size={16} /> Add exercise
       </FormButton>
-    </form>
+    </div>
   );
 }
 

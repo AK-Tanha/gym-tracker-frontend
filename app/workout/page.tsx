@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { IconX } from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
 import { WorkoutDay } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
-import LogSetForm from "@/components/forms/LogSetForm";
+import LogSetForm, { LoggedSet } from "@/components/forms/LogSetForm";
 
 export default function WorkoutRunnerPage() {
   const router = useRouter();
@@ -21,9 +21,47 @@ export default function WorkoutRunnerPage() {
   );
   const [index, setIndex] = useState(0);
   const [logging, setLogging] = useState(false);
+  const loggedSetsRef = useRef<LoggedSet[]>([]);
+
+  const persistLoggedSets = useCallback(async (sets: LoggedSet[]) => {
+    if (sets.length === 0) return;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const entries = sets.map((s, i) => ({
+        id: `ls-${Date.now()}-${i}`,
+        exerciseId: "",
+        exerciseName: "",
+        muscleGroup: "",
+        setNumber: 0,
+        weight: s.weight,
+        reps: s.reps,
+        rpe: s.rpe,
+        notes: s.notes,
+        date: today,
+      }));
+      await api.post("/api/logged-sets", { entries });
+    } catch {
+      // silently fail — sets are still tracked locally
+    }
+  }, []);
 
   const step = queue[index];
   const nextStep = queue[index + 1];
+
+  const handleSetLogged = useCallback(
+    (set: LoggedSet) => {
+      loggedSetsRef.current.push(set);
+      setLogging(false);
+      setIndex((i) => i + 1);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (queue.length > 0 && index >= queue.length) {
+      persistLoggedSets(loggedSetsRef.current);
+    }
+  }, [index, queue.length, persistLoggedSets]);
 
   if (isLoading) {
     return (
@@ -73,6 +111,7 @@ export default function WorkoutRunnerPage() {
             setLogging(false);
             setIndex((i) => i + 1);
           }}
+          onSetLogged={handleSetLogged}
         />
       ) : (
         <RestStep key={index} step={step} onDone={() => setIndex((i) => i + 1)} />
@@ -87,12 +126,14 @@ function ExerciseStep({
   logging,
   onLogToggle,
   onDone,
+  onSetLogged,
 }: {
   step: Extract<ReturnType<typeof flattenDay>[number], { type: "exercise" }>;
   nextStep: ReturnType<typeof flattenDay>[number] | undefined;
   logging: boolean;
   onLogToggle: () => void;
   onDone: () => void;
+  onSetLogged: (set: LoggedSet) => void;
 }) {
   return (
     <div>
@@ -115,7 +156,7 @@ function ExerciseStep({
           <LogSetForm
             suggestedWeight={step.weight ?? 0}
             suggestedReps={step.reps ?? 0}
-            onDone={onDone}
+            onDone={onSetLogged}
           />
         ) : (
           <>

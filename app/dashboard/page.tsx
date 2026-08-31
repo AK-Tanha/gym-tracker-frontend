@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { IconPlayerPlayFilled, IconArrowRight, IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { weekStrip } from "@/lib/mockData";
 import { api, queryKeys } from "@/lib/api";
 import { WorkoutDay, Program } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
@@ -11,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEK_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
 type ProgressStats = {
   workoutsDone: number;
@@ -59,7 +59,6 @@ export default function DashboardPage() {
     queryFn: () => api.get<ProgressStats>("/api/progress"),
   });
   const { data: programsData, isLoading: programsLoading } = useQuery<{
-    programs: Program[];
     myWorkouts: Program[];
   }>({
     queryKey: queryKeys.programs,
@@ -145,7 +144,7 @@ export default function DashboardPage() {
                 style={{ height: 24 }}
               />
               <p className="mt-1 text-center font-mono text-[9px] text-chalk-faint">
-                {weekStrip[i]?.label ?? ""}
+                {WEEK_LABELS[i] ?? ""}
               </p>
             </div>
           ))}

@@ -94,6 +94,7 @@ export function FormButton({
   variant = "primary",
   className = "",
   loading,
+  disabled,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
@@ -102,7 +103,7 @@ export function FormButton({
   return (
     <button
       className={`flex items-center justify-center gap-2 rounded-[10px] px-4 py-3 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${variantStyles[variant]} ${className}`}
-      disabled={loading || props.disabled}
+      disabled={loading || disabled}
       {...props}
     >
       {loading && (

@@ -27,7 +27,15 @@ export default function ProgressPage() {
     );
   }
 
-  const s = data;
+  const s: ProgressStats = {
+    workoutsDone: data?.workoutsDone ?? 0,
+    streakDays: data?.streakDays ?? 0,
+    totalVolumeTonnes: data?.totalVolumeTonnes ?? 0,
+    newPRs: data?.newPRs ?? 0,
+    weekStreak: data?.weekStreak ?? [],
+    benchProgression: data?.benchProgression ?? [],
+    recentPRs: data?.recentPRs ?? [],
+  };
 
   return (
     <div className="px-5 pt-2">

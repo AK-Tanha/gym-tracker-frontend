@@ -11,11 +11,8 @@ export async function GET(
     const { id } = await params;
     const programsCol = await getCollection("programs");
     const doc = await programsCol.findOne(stringIdFilter(SETTINGS_ID));
-    const programs = doc?.programs ?? [];
     const myWorkouts = doc?.myWorkouts ?? [];
-    const program = [...programs, ...myWorkouts].find(
-      (p: { id: string }) => p.id === id
-    );
+    const program = myWorkouts.find((p: { id: string }) => p.id === id);
     if (program) {
       return NextResponse.json(program);
     }
@@ -34,15 +31,12 @@ export async function PUT(
     const { id } = await params;
     const programsCol = await getCollection("programs");
     const doc = await programsCol.findOne(stringIdFilter(SETTINGS_ID));
-    const programs = (doc?.programs ?? []).map((p: { id: string }) =>
-      p.id === id ? { ...p, ...body } : p
-    );
     const myWorkouts = (doc?.myWorkouts ?? []).map((p: { id: string }) =>
-      p.id === id ? { ...p, ...body } : p
+      p.id === id ? { ...p, ...body, isOwn: true } : p
     );
     await programsCol.updateOne(
       stringIdFilter(SETTINGS_ID),
-      { $set: { programs, myWorkouts } },
+      { $set: { myWorkouts } },
       { upsert: true }
     );
     return NextResponse.json({ success: true });
@@ -59,15 +53,12 @@ export async function DELETE(
     const { id } = await params;
     const programsCol = await getCollection("programs");
     const doc = await programsCol.findOne(stringIdFilter(SETTINGS_ID));
-    const programs = (doc?.programs ?? []).filter(
-      (p: { id: string }) => p.id !== id
-    );
     const myWorkouts = (doc?.myWorkouts ?? []).filter(
       (p: { id: string }) => p.id !== id
     );
     await programsCol.updateOne(
       stringIdFilter(SETTINGS_ID),
-      { $set: { programs, myWorkouts } },
+      { $set: { myWorkouts } },
       { upsert: true }
     );
     return NextResponse.json({ success: true });

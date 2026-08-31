@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { IconX } from "@tabler/icons-react";
 
 export function Modal({
@@ -13,6 +14,19 @@ export function Modal({
   title: string;
   children: React.ReactNode;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handler);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, stringIdFilter, stripMongoId } from "@/lib/mongodb";
-import { programs, myWorkouts } from "@/lib/mockData";
 
 const SETTINGS_ID = "programs";
 
@@ -11,9 +10,9 @@ export async function GET() {
     if (doc) {
       return NextResponse.json(stripMongoId(doc));
     }
-    return NextResponse.json({ programs, myWorkouts });
+    return NextResponse.json({ myWorkouts: [] });
   } catch {
-    return NextResponse.json({ programs, myWorkouts });
+    return NextResponse.json({ myWorkouts: [] });
   }
 }
 

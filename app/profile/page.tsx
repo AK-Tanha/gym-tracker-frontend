@@ -69,9 +69,15 @@ export default function ProfilePage() {
   );
 
   const update = async (patch: Partial<Profile>, message?: string) => {
+    const previous = queryClient.getQueryData<Profile>(queryKeys.profile);
     queryClient.setQueryData(queryKeys.profile, { ...profile, ...patch });
-    await updateProfile.mutateAsync(patch as Record<string, unknown>);
-    if (message) showToast(message);
+    try {
+      await updateProfile.mutateAsync(patch as Record<string, unknown>);
+      if (message) showToast(message);
+    } catch {
+      if (previous) queryClient.setQueryData(queryKeys.profile, previous);
+      showToast("Update failed — reverted");
+    }
   };
 
   const saveProfile = async (input: ProfileInput) => {

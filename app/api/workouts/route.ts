@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, stripMongoId } from "@/lib/mongodb";
-import { todaysWorkout } from "@/lib/mockData";
 
 export async function GET() {
   try {
@@ -9,9 +8,9 @@ export async function GET() {
     if (workout) {
       return NextResponse.json(stripMongoId(workout));
     }
-    return NextResponse.json(todaysWorkout);
+    return NextResponse.json(null);
   } catch {
-    return NextResponse.json(todaysWorkout);
+    return NextResponse.json(null);
   }
 }
 

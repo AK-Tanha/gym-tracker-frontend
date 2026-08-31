@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCollection, stringIdFilter, stripMongoId } from "@/lib/mongodb";
-import { todaysWorkout } from "@/lib/mockData";
+import { getCollection, stripMongoId } from "@/lib/mongodb";
 
 export async function GET(
   _request: NextRequest,
@@ -13,9 +12,9 @@ export async function GET(
     if (workout) {
       return NextResponse.json(stripMongoId(workout));
     }
-    return NextResponse.json(todaysWorkout);
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   } catch {
-    return NextResponse.json(todaysWorkout);
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 }
 
