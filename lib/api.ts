@@ -1,4 +1,10 @@
-import { useState, useEffect } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  UseQueryOptions,
+  UseMutationOptions,
+} from "@tanstack/react-query";
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -21,32 +27,47 @@ export const api = {
     apiFetch<T>(url, { method: "DELETE" }),
 };
 
-export function useApi<T>(url: string) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export const queryKeys = {
+  workouts: ["workouts"] as const,
+  workoutDay: (day: number | string) => ["workouts", String(day)] as const,
+  programs: ["programs"] as const,
+  program: (id: string) => ["programs", id] as const,
+  profile: ["profile"] as const,
+  progress: ["progress"] as const,
+};
 
-  useEffect(() => {
-    let cancelled = false;
-    api.get<T>(url)
-      .then((result) => {
-        if (!cancelled) {
-          setData(result);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err.message);
-          setLoading(false);
-        }
+export function useApiQuery<T>(url: string, options?: Partial<UseQueryOptions<T, Error>>) {
+  return useQuery<T, Error>({
+    queryKey: [url],
+    queryFn: () => api.get<T>(url),
+    ...options,
+  });
+}
+
+type MutationState = { success: true };
+
+export function useApiMutation<TData = MutationState, TVariables = unknown>(
+  url: string,
+  method: "POST" | "PUT" | "DELETE",
+  options?: UseMutationOptions<TData, Error, TVariables>
+) {
+  return useMutation<TData, Error, TVariables>({
+    mutationFn: (variables) => {
+      const body = method === "DELETE" ? undefined : variables;
+      return apiFetch<TData>(url, {
+        method,
+        body: body === undefined ? undefined : JSON.stringify(body),
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
+    },
+    ...options,
+  });
+}
 
-  const mutate = (newData: T) => setData(newData);
-
-  return { data, loading, error, mutate };
+export function useApiInvalidations() {
+  const queryClient = useQueryClient();
+  return {
+    invalidate: (...keys: (readonly unknown[])[]) => {
+      keys.forEach((key) => queryClient.invalidateQueries({ queryKey: key as string[] }));
+    },
+  };
 }

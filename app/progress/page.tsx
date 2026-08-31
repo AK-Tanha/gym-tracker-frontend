@@ -1,6 +1,7 @@
 "use client";
 
-import { useApi } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { api, queryKeys } from "@/lib/api";
 
 type ProgressStats = {
   workoutsDone: number;
@@ -13,9 +14,12 @@ type ProgressStats = {
 };
 
 export default function ProgressPage() {
-  const { data, loading } = useApi<ProgressStats>("/api/progress");
+  const { data, isLoading } = useQuery<ProgressStats>({
+    queryKey: queryKeys.progress,
+    queryFn: () => api.get<ProgressStats>("/api/progress"),
+  });
 
-  if (loading || !data) {
+  if (isLoading || !data) {
     return (
       <div className="flex h-full items-center justify-center px-5 pt-2">
         <p className="text-sm text-chalk-faint">Loading…</p>

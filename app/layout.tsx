@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Oswald, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import TabBar from "@/components/TabBar";
+import Providers from "@/components/Providers";
 
 const oswald = Oswald({
   variable: "--font-oswald",
@@ -36,10 +37,12 @@ export default function RootLayout({
       <body
         className={`${oswald.variable} ${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
-        <div className="mx-auto flex min-h-screen max-w-md flex-col bg-iron">
-          <main className="flex-1 overflow-y-auto pb-20">{children}</main>
-          <TabBar />
-        </div>
+        <Providers>
+          <div className="mx-auto flex min-h-screen max-w-md flex-col bg-iron">
+            <main className="flex-1 overflow-y-auto pb-20">{children}</main>
+            <TabBar />
+          </div>
+        </Providers>
       </body>
     </html>
   );

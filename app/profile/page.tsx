@@ -8,9 +8,16 @@ import {
   IconCalendarTime,
   IconLogout,
   IconChevronRight,
+  IconUserEdit,
 } from "@tabler/icons-react";
 import { useState } from "react";
-import { useApi, api } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { api, useApiMutation, queryKeys } from "@/lib/api";
+import { logoutAction } from "@/app/actions/auth";
+import { Modal } from "@/components/forms/Modal";
+import EditProfileForm, { ProfileInput } from "@/components/forms/EditProfileForm";
+import BodyWeightForm from "@/components/forms/BodyWeightForm";
 
 type Profile = {
   name: string;
@@ -22,48 +29,84 @@ type Profile = {
 };
 
 export default function ProfilePage() {
-  const { data, mutate } = useApi<Profile>("/api/profile");
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
   const [toast, setToast] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [loggingWeight, setLoggingWeight] = useState(false);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2000);
-  };
+  const authUser = session?.user;
 
-  const profile = data ?? {
-    name: "AK Tanha",
-    memberSince: "Jan 2026",
-    initials: "AK",
+  const { data } = useQuery<Profile>({
+    queryKey: queryKeys.profile,
+    queryFn: () => api.get<Profile>("/api/profile"),
+    enabled: !!authUser,
+  });
+
+  const profile: Profile = data ?? {
+    name: authUser?.name ?? "Athlete",
+    memberSince: "Member",
+    initials: (authUser?.name ?? "AT")
+      .split(/\s+/)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase(),
     reminders: true,
-    units: "kg",
+    units: authUser?.units ?? "kg",
     schedule: "Weekday",
   };
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2000);
+  };
+
+  const updateProfile = useApiMutation("/api/profile", "PUT");
+  const logWeight = useApiMutation<{ entries: { date: string; weight: number }[] }>(
+    "/api/bodyweight",
+    "POST"
+  );
+
   const update = async (patch: Partial<Profile>, message?: string) => {
-    const next = { ...profile, ...patch };
-    mutate(next);
-    try {
-      await api.put("/api/profile", patch);
-    } catch {
-      // ignore — UI state already updated optimistically
-    }
+    queryClient.setQueryData(queryKeys.profile, { ...profile, ...patch });
+    await updateProfile.mutateAsync(patch as Record<string, unknown>);
     if (message) showToast(message);
+  };
+
+  const saveProfile = async (input: ProfileInput) => {
+    await update({ name: input.name, initials: input.initials }, "Profile updated");
+    setEditingProfile(false);
+  };
+
+  const submitWeight = async (weight: number, date: string) => {
+    await logWeight.mutateAsync({ weight, date });
+    setLoggingWeight(false);
+    showToast(`Logged ${weight}${profile.units}`);
   };
 
   return (
     <div className="px-5 pt-2">
-      <div className="my-3.5 flex items-center gap-3.5">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-plate-blue-bg font-display text-xl font-semibold text-[#7FB2E8]">
-          {profile.initials}
+      <div className="my-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-plate-blue-bg font-display text-xl font-semibold text-[#7FB2E8]">
+            {profile.initials}
+          </div>
+          <div>
+            <p className="font-display text-[19px] font-semibold text-chalk">
+              {profile.name}
+            </p>
+            <p className="mt-0.5 text-xs text-chalk-faint">
+              Member since {profile.memberSince}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="font-display text-[19px] font-semibold text-chalk">
-            {profile.name}
-          </p>
-          <p className="mt-0.5 text-xs text-chalk-faint">
-            Member since {profile.memberSince}
-          </p>
-        </div>
+        <button
+          onClick={() => setEditingProfile(true)}
+          className="flex items-center gap-1.5 rounded-lg border border-plate-blue px-3 py-2 text-xs font-semibold text-[#7FB2E8]"
+        >
+          <IconUserEdit size={15} /> Edit
+        </button>
       </div>
 
       {toast && (
@@ -73,7 +116,7 @@ export default function ProfilePage() {
       )}
 
       <SectionLabel>Body tracking</SectionLabel>
-      <Row icon={IconScale} label="Log today's weight" chevron onClick={() => showToast("Opening weight logger...")} />
+      <Row icon={IconScale} label="Log today's weight" chevron onClick={() => setLoggingWeight(true)} />
       <Row icon={IconPhoto} label="Progress photos" chevron onClick={() => showToast("Opening photo gallery...")} />
 
       <SectionLabel>Preferences</SectionLabel>
@@ -99,7 +142,23 @@ export default function ProfilePage() {
       />
 
       <SectionLabel>Account</SectionLabel>
-      <Row icon={IconLogout} label="Sign out" chevron onClick={() => showToast("Signed out")} />
+      <Row icon={IconLogout} label="Sign out" chevron onClick={() => logoutAction()} />
+
+      <Modal open={editingProfile} onClose={() => setEditingProfile(false)} title="Edit profile">
+        <EditProfileForm
+          initial={{ name: profile.name, initials: profile.initials }}
+          onSubmit={saveProfile}
+          submitting={updateProfile.isPending}
+        />
+      </Modal>
+
+      <Modal open={loggingWeight} onClose={() => setLoggingWeight(false)} title="Log body weight">
+        <BodyWeightForm
+          unit={profile.units as "kg" | "lbs"}
+          onSubmit={submitWeight}
+          submitting={logWeight.isPending}
+        />
+      </Modal>
     </div>
   );
 }

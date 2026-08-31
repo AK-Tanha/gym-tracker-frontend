@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { IconPlayerPlayFilled, IconArrowRight } from "@tabler/icons-react";
+import { IconPlayerPlayFilled, IconArrowRight, IconPlus } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { weekStrip } from "@/lib/mockData";
-import { useApi } from "@/lib/api";
+import { api, queryKeys } from "@/lib/api";
 import { WorkoutDay, Program } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -46,11 +48,25 @@ function StatCard({
 
 export default function DashboardPage() {
   const router = useRouter();
-  const workout = useApi<WorkoutDay>("/api/workouts");
-  const stats = useApi<ProgressStats>("/api/progress");
-  const programsData = useApi<{ programs: Program[]; myWorkouts: Program[] }>("/api/programs");
+  const { data: session } = useSession();
+  const firstName = (session?.user?.name ?? "Athlete").split(" ")[0];
+  const { data: todaysWorkout, isLoading: workoutLoading } = useQuery<WorkoutDay>({
+    queryKey: queryKeys.workoutDay(0),
+    queryFn: () => api.get<WorkoutDay>("/api/workouts"),
+  });
+  const { data: progressStats, isLoading: statsLoading } = useQuery<ProgressStats>({
+    queryKey: queryKeys.progress,
+    queryFn: () => api.get<ProgressStats>("/api/progress"),
+  });
+  const { data: programsData, isLoading: programsLoading } = useQuery<{
+    programs: Program[];
+    myWorkouts: Program[];
+  }>({
+    queryKey: queryKeys.programs,
+    queryFn: () => api.get("/api/programs"),
+  });
 
-  if (workout.loading || stats.loading || programsData.loading) {
+  if (workoutLoading || statsLoading || programsLoading) {
     return (
       <div className="flex h-full items-center justify-center px-5 pt-2">
         <p className="text-sm text-chalk-faint">Loading…</p>
@@ -58,14 +74,14 @@ export default function DashboardPage() {
     );
   }
 
-  const todaysWorkout = workout.data ?? ({} as WorkoutDay);
-  const progressStats = stats.data ?? ({} as ProgressStats);
-  const myWorkouts = programsData.data?.myWorkouts ?? [];
+  const todays = todaysWorkout ?? ({} as WorkoutDay);
+  const stats = progressStats ?? ({} as ProgressStats);
+  const myWorkouts = programsData?.myWorkouts ?? [];
 
-  const totalSets = todaysWorkout.exercises?.reduce((sum, e) => sum + e.sets, 0) ?? 0;
+  const totalSets = todays.exercises?.reduce((sum, e) => sum + e.sets, 0) ?? 0;
   const estMinutes = Math.round(totalSets * 3.2);
-  const todayName = DAY_NAMES[todaysWorkout.dayOfWeek] ?? "Today";
-  const queue = flattenDay(todaysWorkout.exercises ?? []);
+  const todayName = DAY_NAMES[todays.dayOfWeek] ?? "Today";
+  const queue = flattenDay(todays.exercises ?? []);
   const completedSets = queue.filter((s) => s.type === "exercise").length;
 
   return (
@@ -77,14 +93,14 @@ export default function DashboardPage() {
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display text-[28px] font-bold text-chalk">
-              Good morning, AK
+              Good morning, {firstName}
             </h1>
             <p className="mt-0.5 text-sm text-chalk-faint">
-              {todaysWorkout.dayLabel} · {todaysWorkout.category}
+              {todays.dayLabel} · {todays.category}
             </p>
           </div>
           <span className="rounded-md bg-plate-blue-bg px-2.5 py-1 text-[11px] font-semibold text-[#7FB2E8]">
-            {todaysWorkout.exercises?.length ?? 0} exercises
+            {todays.exercises?.length ?? 0} exercises
           </span>
         </div>
       </div>
@@ -92,23 +108,23 @@ export default function DashboardPage() {
       <div className="mb-5 grid grid-cols-2 gap-2.5">
         <StatCard
           label="Workouts done"
-          value={String(progressStats.workoutsDone ?? 0)}
+          value={String(stats.workoutsDone ?? 0)}
           icon={<span className="text-[16px]">🔥</span>}
         />
         <StatCard
           label="Current streak"
-          value={`${progressStats.streakDays ?? 0} days`}
+          value={`${stats.streakDays ?? 0} days`}
           accent
           icon={<span className="text-[16px]">⚡</span>}
         />
         <StatCard
           label="Volume"
-          value={`${progressStats.totalVolumeTonnes ?? 0}t`}
+          value={`${stats.totalVolumeTonnes ?? 0}t`}
           icon={<span className="text-[16px]">🏋️</span>}
         />
         <StatCard
           label="New PRs"
-          value={String(progressStats.newPRs ?? 0)}
+          value={String(stats.newPRs ?? 0)}
           accent
           icon={<span className="text-[16px]">🪜</span>}
         />
@@ -118,11 +134,11 @@ export default function DashboardPage() {
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs text-chalk-faint">This week</p>
           <span className="font-mono text-[11px] text-[#5DCAA5]">
-            {(progressStats.weekStreak ?? []).filter(Boolean).length}/7 days
+            {(stats.weekStreak ?? []).filter(Boolean).length}/7 days
           </span>
         </div>
         <div className="flex gap-1.5">
-          {(progressStats.weekStreak ?? []).map((done, i) => (
+          {(stats.weekStreak ?? []).map((done, i) => (
             <div key={i} className="flex-1">
               <div
                 className={`h-1.5 rounded-full ${done ? "bg-plate-green" : "bg-rubber-2"}`}
@@ -142,14 +158,14 @@ export default function DashboardPage() {
             Today&apos;s workout
           </p>
           <h2 className="font-display text-[17px] font-semibold text-chalk">
-            {todaysWorkout.dayLabel}
+            {todays.dayLabel}
           </h2>
           <p className="mt-0.5 text-xs text-chalk-faint">
             {totalSets} sets · ~{estMinutes} min · {completedSets} steps
           </p>
         </div>
         <div className="mb-4 flex flex-col gap-2">
-          {(todaysWorkout.exercises ?? []).map((ex) => (
+          {(todays.exercises ?? []).map((ex) => (
             <div
               key={ex.id}
               className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
@@ -175,12 +191,19 @@ export default function DashboardPage() {
           <IconPlayerPlayFilled size={16} />
           Start workout
         </button>
+        <button
+          onClick={() => router.push("/workout/editor")}
+          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] border border-rubber-2 py-3 text-sm font-semibold text-chalk-dim"
+        >
+          <IconPlus size={15} />
+          Build my week
+        </button>
       </div>
 
       <div className="mb-5 rounded-[14px] bg-rubber p-4">
         <p className="mb-3 text-xs text-chalk-faint">Bench press · working weight (kg)</p>
         <div className="flex h-[90px] items-end gap-2">
-          {(progressStats.benchProgression ?? []).map((h, i) => (
+          {(stats.benchProgression ?? []).map((h, i) => (
             <div key={i} className="relative flex-1">
               <div
                 className="rounded-t bg-plate-blue"
@@ -198,7 +221,7 @@ export default function DashboardPage() {
         Recent PRs
       </div>
       <div className="flex flex-col gap-2">
-        {(progressStats.recentPRs ?? []).map((pr) => (
+        {(stats.recentPRs ?? []).map((pr) => (
           <div
             key={pr.name}
             className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"

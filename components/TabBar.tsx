@@ -19,6 +19,13 @@ const TABS = [
 export default function TabBar() {
   const pathname = usePathname();
 
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup")
+  ) {
+    return null;
+  }
+
   return (
     <nav className="fixed bottom-0 left-1/2 z-20 flex h-16 w-full max-w-md -translate-x-1/2 items-center justify-around border-t border-black bg-rubber">
       {TABS.map(({ href, label, icon: Icon }) => {

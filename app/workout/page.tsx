@@ -2,25 +2,30 @@
 
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { IconX } from "@tabler/icons-react";
-import { useApi } from "@/lib/api";
+import { api, queryKeys } from "@/lib/api";
 import { WorkoutDay } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
+import LogSetForm from "@/components/forms/LogSetForm";
 
 export default function WorkoutRunnerPage() {
   const router = useRouter();
-  const workout = useApi<WorkoutDay>("/api/workouts");
-  const todaysWorkout = workout.data;
+  const { data: todaysWorkout, isLoading } = useQuery<WorkoutDay>({
+    queryKey: queryKeys.workoutDay(0),
+    queryFn: () => api.get<WorkoutDay>("/api/workouts"),
+  });
   const queue = useMemo(
     () => (todaysWorkout ? flattenDay(todaysWorkout.exercises) : []),
     [todaysWorkout]
   );
   const [index, setIndex] = useState(0);
+  const [logging, setLogging] = useState(false);
 
   const step = queue[index];
   const nextStep = queue[index + 1];
 
-  if (workout.loading) {
+  if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center px-5 pt-2">
         <p className="text-sm text-chalk-faint">Loading workout…</p>
@@ -29,7 +34,6 @@ export default function WorkoutRunnerPage() {
   }
 
   if (!step) {
-    // Ran off the end of the queue: session complete.
     return (
       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
         <h1 className="mb-2 font-display text-2xl font-semibold text-chalk">
@@ -63,7 +67,12 @@ export default function WorkoutRunnerPage() {
         <ExerciseStep
           step={step}
           nextStep={nextStep}
-          onDone={() => setIndex((i) => i + 1)}
+          logging={logging}
+          onLogToggle={() => setLogging((l) => !l)}
+          onDone={() => {
+            setLogging(false);
+            setIndex((i) => i + 1);
+          }}
         />
       ) : (
         <RestStep key={index} step={step} onDone={() => setIndex((i) => i + 1)} />
@@ -75,10 +84,14 @@ export default function WorkoutRunnerPage() {
 function ExerciseStep({
   step,
   nextStep,
+  logging,
+  onLogToggle,
   onDone,
 }: {
   step: Extract<ReturnType<typeof flattenDay>[number], { type: "exercise" }>;
   nextStep: ReturnType<typeof flattenDay>[number] | undefined;
+  logging: boolean;
+  onLogToggle: () => void;
   onDone: () => void;
 }) {
   return (
@@ -97,12 +110,29 @@ function ExerciseStep({
           <span className="text-xl text-chalk-faint">reps</span>
         </p>
         <p className="mb-7 text-xs text-chalk-faint">Last time: {step.lastTime}</p>
-        <button
-          onClick={onDone}
-          className="w-full rounded-[10px] bg-plate-green py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white"
-        >
-          Mark set done
-        </button>
+
+        {logging ? (
+          <LogSetForm
+            suggestedWeight={step.weight ?? 0}
+            suggestedReps={step.reps ?? 0}
+            onDone={onDone}
+          />
+        ) : (
+          <>
+            <button
+              onClick={onLogToggle}
+              className="w-full rounded-[10px] bg-plate-green py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white"
+            >
+              Mark set done
+            </button>
+            <button
+              onClick={onDone}
+              className="mt-2.5 w-full rounded-[10px] border border-rubber-2 py-3 text-xs font-semibold text-chalk-faint"
+            >
+              Skip & log later
+            </button>
+          </>
+        )}
       </div>
 
       {nextStep && (
