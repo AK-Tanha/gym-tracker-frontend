@@ -1,5 +1,7 @@
 "use client";
 
+import { IconMinus, IconPlus } from "@tabler/icons-react";
+
 export function Label({
   htmlFor,
   children,
@@ -77,6 +79,76 @@ export function Select({
         ))}
       </select>
       <FieldError error={error} />
+    </div>
+  );
+}
+
+export function StepperInput({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max,
+  step = 1,
+  format,
+  className = "",
+}: {
+  label?: string;
+  value: number;
+  onChange: (next: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  format?: (n: number) => string;
+  className?: string;
+}) {
+  const clamp = (n: number) => {
+    let out = Number.isFinite(n) ? n : min;
+    if (min !== undefined && out < min) out = min;
+    if (max !== undefined && out > max) out = max;
+    return out;
+  };
+
+  const btn =
+    "flex h-10 w-9 items-center justify-center text-chalk-dim transition hover:text-chalk disabled:opacity-30";
+
+  return (
+    <div className={className}>
+      {label && (
+        <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
+          {label}
+        </span>
+      )}
+      <div className="flex items-center overflow-hidden rounded-[10px] bg-rubber-2">
+        <button
+          type="button"
+          aria-label={`Decrease ${label ?? "value"}`}
+          className={btn}
+          disabled={value <= min}
+          onClick={() => onChange(clamp(value - step))}
+        >
+          <IconMinus size={15} />
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={format ? format(value) : value}
+          onChange={(e) => {
+            const n = parseFloat(e.target.value);
+            if (!Number.isNaN(n)) onChange(clamp(n));
+          }}
+          className="h-10 w-full min-w-0 flex-1 bg-transparent text-center font-mono text-sm text-chalk outline-none"
+        />
+        <button
+          type="button"
+          aria-label={`Increase ${label ?? "value"}`}
+          className={btn}
+          disabled={max !== undefined && value >= max}
+          onClick={() => onChange(clamp(value + step))}
+        >
+          <IconPlus size={15} />
+        </button>
+      </div>
     </div>
   );
 }

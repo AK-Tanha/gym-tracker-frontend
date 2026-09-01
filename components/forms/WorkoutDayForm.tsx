@@ -38,6 +38,7 @@ export default function WorkoutDayForm({
   );
   const [exercises, setExercises] = useState<PlannedExercise[]>(initial?.exercises ?? []);
   const [grouped, setGrouped] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const set = <K extends keyof Omit<WorkoutDay, "exercises">>(key: K, value: Omit<WorkoutDay, "exercises">[K]) => {
@@ -46,8 +47,39 @@ export default function WorkoutDayForm({
   };
 
   const addExercise = (ex: PlannedExercise) => {
-    setExercises((list) => [...list, ex]);
+    if (editingId) {
+      setExercises((list) => list.map((x) => (x.id === editingId ? ex : x)));
+      setEditingId(null);
+    } else {
+      setExercises((list) => [...list, ex]);
+    }
     setError(null);
+  };
+
+  const reorder = (fromIndex: number, toIndex: number) => {
+    setExercises((list) => {
+      const next = [...list];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const duplicate = (id: string) => {
+    setExercises((list) => {
+      const target = list.find((x) => x.id === id);
+      if (!target) return list;
+      const copy = {
+        ...target,
+        id: `ex-${Math.random().toString(36).slice(2, 10)}`,
+        groupId: null,
+        groupLabel: undefined,
+      };
+      const idx = list.findIndex((x) => x.id === id);
+      const next = [...list];
+      next.splice(idx + 1, 0, copy);
+      return next;
+    });
   };
 
   const submit = (e: React.FormEvent) => {
@@ -110,9 +142,24 @@ export default function WorkoutDayForm({
 
           <div className="rounded-[14px] bg-rubber p-4">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
-              Add exercise
+              {editingId ? "Edit exercise" : "Add exercise"}
             </p>
-            <ExerciseForm onChange={addExercise} isGrouped={grouped} groupLabel={false} />
+            {editingId && (
+              <button
+                type="button"
+                onClick={() => setEditingId(null)}
+                className="mb-2 rounded-lg bg-rubber-2 px-2.5 py-1.5 text-[11px] font-semibold text-chalk-dim hover:text-chalk"
+              >
+                Cancel editing
+              </button>
+            )}
+            <ExerciseForm
+              onChange={addExercise}
+              isGrouped={grouped}
+              groupLabel={false}
+              initial={editingId ? exercises.find((x) => x.id === editingId) : undefined}
+              editingId={editingId}
+            />
           </div>
 
           <div className="rounded-[14px] bg-rubber p-4">
@@ -125,6 +172,9 @@ export default function WorkoutDayForm({
               <ExerciseList
                 exercises={exercises}
                 onRemove={(id) => setExercises((l) => l.filter((x) => x.id !== id))}
+                onReorder={reorder}
+                onDuplicate={duplicate}
+                onEdit={(id) => setEditingId(id)}
               />
             )}
           </div>

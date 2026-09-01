@@ -12,6 +12,7 @@ export type PlannedExercise = {
   weight: number;
   restBetweenSets: number;
   restBetweenReps: number;
+  notes?: string;
 };
 
 export type WorkoutDay = {
