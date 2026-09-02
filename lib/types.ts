@@ -1,5 +1,7 @@
 export type ExerciseType = "single" | "superset" | "giant-set";
 
+export type ExerciseUnit = "reps" | "time";
+
 export type PlannedExercise = {
   id: string;
   name: string;
@@ -7,8 +9,10 @@ export type PlannedExercise = {
   type: ExerciseType;
   groupId: string | null;
   groupLabel?: string;
+  unit: ExerciseUnit;
   sets: number;
   reps: number;
+  duration: number;
   weight: number;
   restBetweenSets: number;
   restBetweenReps: number;
@@ -40,11 +44,13 @@ export type ExecutionStep =
       exerciseId: string;
       exerciseName: string;
       muscleGroup: string;
+      unit: ExerciseUnit;
       setNumber: number;
       totalSets: number;
       groupLabel?: string;
       weight?: number;
       reps?: number;
+      duration?: number;
       lastTime?: string; // e.g. "57.5kg x 8", shown as a reference
     }
   | {

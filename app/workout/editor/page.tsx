@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys, useApiInvalidations } from "@/lib/api";
 import { Program, WorkoutDay } from "@/lib/types";
 import { Modal } from "@/components/forms/Modal";
@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 export default function WorkoutEditorPage() {
   const router = useRouter();
   const { invalidate } = useApiInvalidations();
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState<WorkoutDay | "new" | null>(null);
 
   const { data: activeProgram, isLoading } = useQuery<Program>({
@@ -23,6 +24,9 @@ export default function WorkoutEditorPage() {
 
   const handleSave = async (day: WorkoutDay) => {
     if (!activeProgram) return;
+    const cached = queryClient.getQueryData<Program>(queryKeys.activeProgram);
+    const current = cached?.workoutDays ? cached : activeProgram;
+    const days = current.workoutDays ?? [];
     const exists = days.some((d) => d.dayOfWeek === day.dayOfWeek);
     const updatedDays = exists
       ? days.map((d) => (d.dayOfWeek === day.dayOfWeek ? day : d))
@@ -147,6 +151,7 @@ export default function WorkoutEditorPage() {
         <WorkoutDayForm
           initial={editing && editing !== "new" ? editing : undefined}
           onSave={handleSave}
+          takenDays={days.map((d) => d.dayOfWeek)}
         />
       </Modal>
     </div>

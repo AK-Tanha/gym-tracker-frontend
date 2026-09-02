@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, useApiMutation, useApiInvalidations, queryKeys } from "@/lib/api";
 import { Program, WorkoutDay } from "@/lib/types";
 import { useState } from "react";
@@ -8,15 +8,18 @@ import { Modal } from "@/components/forms/Modal";
 import ProgramForm from "@/components/forms/ProgramForm";
 import WorkoutDayForm from "@/components/forms/WorkoutDayForm";
 import { FormButton } from "@/components/forms/primitives";
+import { DAY_NAMES } from "@/lib/todayWorkout";
 import { IconPlus, IconPencil, IconTrash, IconChevronDown } from "@tabler/icons-react";
 
 export default function ProgramsPage() {
   const { invalidate } = useApiInvalidations();
+  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Program | null>(null);
   const [deleting, setDeleting] = useState<Program | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dayTarget, setDayTarget] = useState<{ program: Program; day?: WorkoutDay } | null>(null);
+  const [viewingDay, setViewingDay] = useState<{ program: Program; day: WorkoutDay } | null>(null);
 
   const { data, isLoading } = useQuery<{ myWorkouts: Program[] }>({
     queryKey: queryKeys.programs,
@@ -60,7 +63,11 @@ export default function ProgramsPage() {
 
   const saveDay = async (day: WorkoutDay) => {
     if (!dayTarget) return;
-    const program = dayTarget.program;
+    const id = dayTarget.program.id;
+    const cached = queryClient.getQueryData<{ myWorkouts: Program[] }>(queryKeys.programs);
+    const current =
+      cached?.myWorkouts?.find((p) => p.id === id) ?? dayTarget.program;
+    const program = { ...current, workoutDays: current.workoutDays ?? [] };
     const days = program.workoutDays ?? [];
     const exists = days.some((d) => d.dayOfWeek === day.dayOfWeek);
     const updatedDays = exists
@@ -193,18 +200,24 @@ export default function ProgramsPage() {
                           key={day.dayOfWeek}
                           className="flex items-center justify-between rounded-[10px] bg-rubber px-3 py-2"
                         >
-                          <div>
-                            <p className="text-sm font-medium text-chalk">
-                              {day.dayLabel}
-                            </p>
-                            <p className="mt-0.5 font-mono text-[11px] text-chalk-faint">
-                              {day.isRestDay
-                                ? "Rest day"
-                                : `${day.exercises.length} exercises${
-                                    day.category ? ` · ${day.category}` : ""
-                                  }`}
-                            </p>
-                          </div>
+                          <button
+                            onClick={() => setViewingDay({ program: w, day })}
+                            className="flex flex-1 items-center justify-between text-left"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-chalk">
+                                {DAY_NAMES[day.dayOfWeek] ?? day.dayLabel}
+                              </p>
+                              <p className="mt-0.5 font-mono text-[11px] text-chalk-faint">
+                                {day.dayLabel}
+                                {day.isRestDay
+                                  ? " · Rest day"
+                                  : ` · ${day.exercises.length} exercises${
+                                      day.category ? ` · ${day.category}` : ""
+                                    }`}
+                              </p>
+                            </div>
+                          </button>
                           <div className="flex gap-1">
                             <button
                               onClick={() => setDayTarget({ program: w, day })}
@@ -252,8 +265,70 @@ export default function ProgramsPage() {
         <WorkoutDayForm
           initial={dayTarget?.day}
           onSave={saveDay}
+          takenDays={(dayTarget?.program.workoutDays ?? []).map((d) => d.dayOfWeek)}
         />
       </Modal>
+
+      {viewingDay && (
+        <Modal
+          open={viewingDay !== null}
+          onClose={() => setViewingDay(null)}
+          title={DAY_NAMES[viewingDay.day.dayOfWeek] ?? viewingDay.day.dayLabel}
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-semibold text-chalk">{viewingDay.day.dayLabel}</p>
+              {viewingDay.day.category && (
+                <p className="mt-0.5 font-mono text-[11px] uppercase tracking-wide text-chalk-faint">
+                  {viewingDay.day.category}
+                </p>
+              )}
+            </div>
+
+            {viewingDay.day.isRestDay ? (
+              <p className="rounded-[10px] bg-rubber-2 px-3.5 py-3 text-sm text-plate-green">
+                Rest day — no exercises scheduled.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {(viewingDay.day.exercises ?? []).length === 0 ? (
+                  <p className="text-sm text-chalk-faint">No exercises added.</p>
+                ) : (
+                  (viewingDay.day.exercises ?? []).map((ex) => (
+                    <div
+                      key={ex.id}
+                      className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-chalk">{ex.name}</p>
+                        <p className="mt-0.5 font-mono text-xs text-chalk-faint">
+                          {ex.unit === "time"
+                            ? `${ex.weight > 0 ? `${ex.weight}kg × ` : ""}${ex.duration}s · ${ex.sets} sets`
+                            : `${ex.weight}kg × ${ex.reps} reps · ${ex.sets} sets`}
+                        </p>
+                      </div>
+                      {ex.groupLabel && (
+                        <span className="font-mono text-[10px] font-bold text-plate-yellow">
+                          {ex.groupLabel}
+                        </span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setDayTarget({ program: viewingDay.program, day: viewingDay.day });
+              setViewingDay(null);
+            }}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-[10px] bg-plate-red py-3.5 font-display text-sm font-semibold uppercase tracking-wide text-white active:scale-[0.98]"
+          >
+            Edit workout
+          </button>
+        </Modal>
+      )}
 
       <Modal open={deleting !== null} onClose={() => setDeleting(null)} title="Delete program">
         <div>

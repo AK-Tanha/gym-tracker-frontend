@@ -65,7 +65,7 @@ export function Select({
   ...props
 }: React.SelectHTMLAttributes<HTMLSelectElement> & {
   label?: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   error?: string;
 }) {
   return (
@@ -73,7 +73,7 @@ export function Select({
       {label && <Label htmlFor={props.id}>{label}</Label>}
       <select className={`${baseField} appearance-none bg-rubber-2`} {...props}>
         {options.map((o) => (
-          <option key={o.value} value={o.value} className="bg-rubber-2 text-chalk">
+          <option key={o.value} value={o.value} disabled={o.disabled} className="bg-rubber-2 text-chalk">
             {o.label}
           </option>
         ))}

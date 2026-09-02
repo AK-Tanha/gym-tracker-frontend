@@ -6,11 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { api, queryKeys } from "@/lib/api";
 import { WorkoutDay, Program } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
+import { getTodaysWorkout, todayName } from "@/lib/todayWorkout";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useMemo } from "react";
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const WEEK_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
 type ProgressStats = {
@@ -55,12 +54,7 @@ export default function DashboardPage() {
     queryKey: queryKeys.activeProgram,
     queryFn: () => api.get<Program>("/api/programs/active"),
   });
-  const todaysWorkout = useMemo<WorkoutDay | undefined>(() => {
-    if (!activeProgram?.workoutDays?.length) return undefined;
-    const todayDow = new Date().getDay();
-    const day = activeProgram.workoutDays.find((d) => d.dayOfWeek === todayDow);
-    return day ?? activeProgram.workoutDays[0];
-  }, [activeProgram]);
+  const todaysWorkout = getTodaysWorkout(activeProgram);
   const { data: progressStats, isLoading: statsLoading } = useQuery<ProgressStats>({
     queryKey: queryKeys.progress,
     queryFn: () => api.get<ProgressStats>("/api/progress"),
@@ -86,7 +80,7 @@ export default function DashboardPage() {
 
   const totalSets = todays.exercises?.reduce((sum, e) => sum + e.sets, 0) ?? 0;
   const estMinutes = Math.round(totalSets * 3.2);
-  const todayName = DAY_NAMES[todays.dayOfWeek] ?? "Today";
+  const weekdayName = todayName(todays.dayOfWeek);
   const queue = flattenDay(todays.exercises ?? []);
   const completedSets = queue.filter((s) => s.type === "exercise").length;
 
@@ -94,7 +88,7 @@ export default function DashboardPage() {
     <div className="px-5 pt-2">
       <div className="mb-5">
         <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-chalk-faint">
-          {todayName}
+          {weekdayName}
         </p>
         <div className="flex items-end justify-between">
           <div>
@@ -102,11 +96,13 @@ export default function DashboardPage() {
               Good morning, {firstName}
             </h1>
             <p className="mt-0.5 text-sm text-chalk-faint">
-              {todays.dayLabel} · {todays.category}
+              {todaysWorkout
+                ? `${todays.dayLabel}${todays.category ? ` · ${todays.category}` : ""}`
+                : `Rest day — no workout scheduled for ${weekdayName}`}
             </p>
           </div>
           <span className="rounded-md bg-plate-blue-bg px-2.5 py-1 text-[11px] font-semibold text-[#7FB2E8]">
-            {todays.exercises?.length ?? 0} exercises
+            {todaysWorkout ? `${todays.exercises?.length ?? 0} exercises` : "Rest"}
           </span>
         </div>
       </div>
@@ -164,42 +160,58 @@ export default function DashboardPage() {
             Today&apos;s workout
           </p>
           <h2 className="font-display text-[17px] font-semibold text-chalk">
-            {todays.dayLabel}
+            {todaysWorkout ? todays.dayLabel : "Rest day"}
           </h2>
-          <p className="mt-0.5 text-xs text-chalk-faint">
-            {totalSets} sets · ~{estMinutes} min · {completedSets} steps
-          </p>
+          {todaysWorkout ? (
+            <p className="mt-0.5 text-xs text-chalk-faint">
+              {totalSets} sets · ~{estMinutes} min · {completedSets} steps
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs text-chalk-faint">
+              No workout scheduled for {weekdayName}.
+            </p>
+          )}
         </div>
-        <div className="mb-4 flex flex-col gap-2">
-          {(todays.exercises ?? []).map((ex) => (
-            <div
-              key={ex.id}
-              className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
-            >
-              <div>
-                <p className="text-sm font-medium text-chalk">{ex.name}</p>
-                <p className="mt-0.5 font-mono text-xs text-chalk-faint">
-                  {ex.weight}kg × {ex.reps} reps · {ex.sets} sets
-                </p>
-              </div>
-              {ex.groupLabel && (
-                <span className="font-mono text-[10px] font-bold text-plate-yellow">
-                  {ex.groupLabel}
-                </span>
-              )}
+        {todaysWorkout && (
+          <>
+            <div className="mb-4 flex flex-col gap-2">
+              {(todays.exercises ?? []).map((ex) => (
+                <div
+                  key={ex.id}
+                  className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-chalk">{ex.name}</p>
+                    <p className="mt-0.5 font-mono text-xs text-chalk-faint">
+                      {ex.unit === "time"
+                        ? `${ex.weight > 0 ? `${ex.weight}kg × ` : ""}${ex.duration}s · ${ex.sets} sets`
+                        : `${ex.weight}kg × ${ex.reps} reps · ${ex.sets} sets`}
+                    </p>
+                  </div>
+                  {ex.groupLabel && (
+                    <span className="font-mono text-[10px] font-bold text-plate-yellow">
+                      {ex.groupLabel}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <button
-          onClick={() => router.push("/workout")}
-          className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-plate-red py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white active:scale-[0.98]"
-        >
-          <IconPlayerPlayFilled size={16} />
-          Start workout
-        </button>
+            <button
+              onClick={() => router.push("/workout")}
+              className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-plate-red py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white active:scale-[0.98]"
+            >
+              <IconPlayerPlayFilled size={16} />
+              Start workout
+            </button>
+          </>
+        )}
         <button
           onClick={() => router.push("/workout/editor")}
-          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] border border-rubber-2 py-3 text-sm font-semibold text-chalk-dim"
+          className={
+            todaysWorkout
+              ? "mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] border border-rubber-2 py-3 text-sm font-semibold text-chalk-dim"
+              : "flex w-full items-center justify-center gap-2 rounded-[10px] bg-plate-red py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white active:scale-[0.98]"
+          }
         >
           <IconPlus size={15} />
           Build my week

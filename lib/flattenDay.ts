@@ -1,5 +1,12 @@
 import { PlannedExercise, ExecutionStep } from "./types";
 
+export function exerciseLabel(ex: PlannedExercise): string {
+  if (ex.unit === "time") {
+    return ex.weight > 0 ? `${ex.weight}kg × ${ex.duration}s` : `${ex.duration}s`;
+  }
+  return `${ex.weight}kg × ${ex.reps}`;
+}
+
 export function flattenDay(exercises: PlannedExercise[]): ExecutionStep[] {
   const steps: ExecutionStep[] = [];
 
@@ -31,18 +38,19 @@ export function flattenDay(exercises: PlannedExercise[]): ExecutionStep[] {
 
       for (let round = 1; round <= rounds; round++) {
         group.forEach((gEx, gi) => {
-          const lastTime = `${gEx.weight - 2.5}kg x ${gEx.reps}`;
           steps.push({
             type: "exercise",
             exerciseId: gEx.id,
             exerciseName: gEx.name,
             muscleGroup: gEx.muscleGroup,
+            unit: gEx.unit ?? "reps",
             setNumber: round,
             totalSets: gEx.sets,
             groupLabel: gEx.groupLabel,
             weight: gEx.weight,
             reps: gEx.reps,
-            lastTime,
+            duration: gEx.duration,
+            lastTime: exerciseLabel(gEx),
           });
           const isLastInRound = gi === group.length - 1;
           const isLastRound = round === rounds;
@@ -72,17 +80,18 @@ export function flattenDay(exercises: PlannedExercise[]): ExecutionStep[] {
     }
 
     for (let set = 1; set <= ex.sets; set++) {
-      const lastTime = `${ex.weight - 2.5}kg x ${ex.reps}`;
       steps.push({
         type: "exercise",
         exerciseId: ex.id,
         exerciseName: ex.name,
         muscleGroup: ex.muscleGroup,
+        unit: ex.unit ?? "reps",
         setNumber: set,
         totalSets: ex.sets,
         weight: ex.weight,
         reps: ex.reps,
-        lastTime,
+        duration: ex.duration,
+        lastTime: exerciseLabel(ex),
       });
       const isLastSet = set === ex.sets;
       if (!isLastSet) {

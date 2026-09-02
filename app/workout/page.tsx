@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { IconX } from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
-import { Program, WorkoutDay } from "@/lib/types";
+import { Program } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
+import { getTodaysWorkout } from "@/lib/todayWorkout";
 import LogSetForm, { LoggedSet } from "@/components/forms/LogSetForm";
 
 export default function WorkoutRunnerPage() {
@@ -16,12 +17,7 @@ export default function WorkoutRunnerPage() {
     queryFn: () => api.get<Program>("/api/programs/active"),
   });
 
-  const todaysWorkout = useMemo<WorkoutDay | undefined>(() => {
-    if (!activeProgram?.workoutDays?.length) return undefined;
-    const todayDow = new Date().getDay();
-    const day = activeProgram.workoutDays.find((d) => d.dayOfWeek === todayDow);
-    return day ?? activeProgram.workoutDays[0];
-  }, [activeProgram]);
+  const todaysWorkout = getTodaysWorkout(activeProgram);
   const queue = useMemo(
     () => (todaysWorkout ? flattenDay(todaysWorkout.exercises) : []),
     [todaysWorkout]
@@ -40,8 +36,10 @@ export default function WorkoutRunnerPage() {
         exerciseName: s.exerciseName ?? "",
         muscleGroup: s.muscleGroup ?? "",
         setNumber: s.setNumber ?? 0,
+        unit: s.unit ?? "reps",
         weight: s.weight,
         reps: s.reps,
+        duration: s.duration ?? 0,
         rpe: s.rpe,
         notes: s.notes,
         date: today,
@@ -61,6 +59,7 @@ export default function WorkoutRunnerPage() {
         set.exerciseName = step.exerciseName;
         set.muscleGroup = step.muscleGroup;
         set.setNumber = step.setNumber;
+        set.unit = step.unit ?? "reps";
       }
       loggedSetsRef.current.push(set);
       setLogging(false);
@@ -79,6 +78,25 @@ export default function WorkoutRunnerPage() {
     return (
       <div className="flex h-full items-center justify-center px-5 pt-2">
         <p className="text-sm text-chalk-faint">Loading workout…</p>
+      </div>
+    );
+  }
+
+  if (!todaysWorkout) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+        <h1 className="mb-2 font-display text-2xl font-semibold text-chalk">
+          Rest day
+        </h1>
+        <p className="mb-6 text-sm text-chalk-faint">
+          No workout scheduled for today. Nice work staying consistent!
+        </p>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="rounded-[10px] bg-plate-green px-6 py-3 font-display text-sm font-semibold uppercase tracking-wide text-white"
+        >
+          Back to dashboard
+        </button>
       </div>
     );
   }
@@ -159,15 +177,33 @@ function ExerciseStep({
         </h1>
         <p className="mb-6.5 text-xs text-chalk-faint">{step.muscleGroup}</p>
         <p className="mb-1.5 font-mono text-[44px] font-bold text-chalk">
-          {step.weight}<span className="text-xl text-chalk-faint">kg</span> × {step.reps}
-          <span className="text-xl text-chalk-faint">reps</span>
+          {step.unit === "time" ? (
+            <>
+              {step.weight ? (
+                <>
+                  {step.weight}
+                  <span className="text-xl text-chalk-faint">kg</span> ×{" "}
+                </>
+              ) : null}
+              {step.duration}
+              <span className="text-xl text-chalk-faint">s hold</span>
+            </>
+          ) : (
+            <>
+              {step.weight}
+              <span className="text-xl text-chalk-faint">kg</span> × {step.reps}
+              <span className="text-xl text-chalk-faint">reps</span>
+            </>
+          )}
         </p>
         <p className="mb-7 text-xs text-chalk-faint">Last time: {step.lastTime}</p>
 
         {logging ? (
           <LogSetForm
+            unit={step.unit ?? "reps"}
             suggestedWeight={step.weight ?? 0}
             suggestedReps={step.reps ?? 0}
+            suggestedDuration={step.duration ?? 0}
             onDone={onSetLogged}
           />
         ) : (

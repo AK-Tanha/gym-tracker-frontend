@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlannedExercise, ExerciseType } from "@/lib/types";
+import { PlannedExercise, ExerciseType, ExerciseUnit } from "@/lib/types";
 import { TextInput, Select, FormButton, FieldError, StepperInput } from "./primitives";
 import { IconPlus, IconTrash, IconPencil, IconArrowUp, IconArrowDown, IconCopy } from "@tabler/icons-react";
 import { suggestionsFor } from "@/lib/exerciseLibrary";
@@ -13,8 +13,10 @@ const EMPTY_EXERCISE: ExerciseDraft = {
   muscleGroup: "",
   type: "single",
   groupId: null,
+  unit: "reps",
   sets: 3,
   reps: 10,
+  duration: 60,
   weight: 20,
   restBetweenSets: 90,
   restBetweenReps: 0,
@@ -25,6 +27,11 @@ const TYPE_OPTIONS = [
   { value: "single", label: "Single" },
   { value: "superset", label: "Superset" },
   { value: "giant-set", label: "Giant set" },
+];
+
+const UNIT_OPTIONS = [
+  { value: "reps", label: "Reps" },
+  { value: "time", label: "Time" },
 ];
 
 const REST_PRESETS = [45, 60, 90, 120, 180];
@@ -54,8 +61,10 @@ export default function ExerciseForm({
           type: initial.type,
           groupId: initial.groupId,
           groupLabel: initial.groupLabel ?? "",
+          unit: initial.unit ?? "reps",
           sets: initial.sets,
           reps: initial.reps,
+          duration: initial.duration ?? 60,
           weight: initial.weight,
           restBetweenSets: initial.restBetweenSets,
           restBetweenReps: initial.restBetweenReps,
@@ -147,20 +156,38 @@ export default function ExerciseForm({
           value={draft.type}
           onChange={(e) => set("type", e.target.value as ExerciseType)}
         />
+        <Select
+          label="Reps / Time"
+          options={UNIT_OPTIONS}
+          value={draft.unit}
+          onChange={(e) => set("unit", e.target.value as ExerciseUnit)}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <StepperInput
           label="Sets"
           min={1}
           value={draft.sets}
           onChange={(n) => set("sets", n)}
         />
+        {draft.unit === "reps" ? (
+          <StepperInput
+            label="Reps"
+            min={1}
+            value={draft.reps}
+            onChange={(n) => set("reps", n)}
+          />
+        ) : (
+          <StepperInput
+            label="Time (s)"
+            min={1}
+            step={5}
+            value={draft.duration}
+            onChange={(n) => set("duration", n)}
+          />
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <StepperInput
-          label="Reps"
-          min={1}
-          value={draft.reps}
-          onChange={(n) => set("reps", n)}
-        />
         <StepperInput
           label="Weight (kg)"
           min={0}
@@ -169,6 +196,7 @@ export default function ExerciseForm({
           value={draft.weight}
           onChange={(n) => set("weight", n)}
         />
+        <div />
       </div>
       <div>
         <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
@@ -253,7 +281,11 @@ export function ExerciseList({
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-chalk">{ex.name}</p>
               <p className="mt-0.5 font-mono text-[11px] text-chalk-faint">
-                {ex.muscleGroup} · {ex.weight}kg × {ex.reps} · {ex.sets} sets
+                {ex.muscleGroup} ·{" "}
+                {ex.unit === "time"
+                  ? `${ex.weight > 0 ? `${ex.weight}kg · ` : ""}${ex.duration}s hold`
+                  : `${ex.weight}kg × ${ex.reps} reps`}{" "}
+                · {ex.sets} sets
                 {ex.groupLabel ? ` · ${ex.groupLabel}` : ""}
               </p>
               {ex.notes && (

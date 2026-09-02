@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { TextInput, Select, FormButton, FieldError } from "./primitives";
+import { ExerciseUnit } from "@/lib/types";
 
 export type LoggedSet = {
   weight: number;
   reps: number;
+  duration: number;
+  unit: ExerciseUnit;
   rpe: number | null;
   notes: string;
   exerciseName?: string;
@@ -13,22 +16,28 @@ export type LoggedSet = {
   setNumber?: number;
 };
 
-const EMPTY: LoggedSet = { weight: 0, reps: 0, rpe: null, notes: "" };
+const EMPTY: LoggedSet = { weight: 0, reps: 0, duration: 0, unit: "reps", rpe: null, notes: "" };
 
 export default function LogSetForm({
+  unit = "reps",
   suggestedWeight,
   suggestedReps,
+  suggestedDuration,
   onDone,
   submitting,
 }: {
+  unit?: ExerciseUnit;
   suggestedWeight: number;
   suggestedReps: number;
+  suggestedDuration: number;
   onDone: (set: LoggedSet) => void;
   submitting?: boolean;
 }) {
   const [set, setSet] = useState<LoggedSet>({
     weight: suggestedWeight,
     reps: suggestedReps,
+    duration: suggestedDuration,
+    unit,
     rpe: null,
     notes: "",
   });
@@ -36,12 +45,17 @@ export default function LogSetForm({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (set.reps < 1) {
-      setError("Enter reps completed.");
+    if (unit === "reps") {
+      if (set.reps < 1) {
+        setError("Enter reps completed.");
+        return;
+      }
+    } else if (set.duration < 1) {
+      setError("Enter seconds completed.");
       return;
     }
-    onDone(set);
-    setSet(EMPTY);
+    onDone({ ...set, unit });
+    setSet({ ...EMPTY, unit });
   };
 
   return (
@@ -55,13 +69,23 @@ export default function LogSetForm({
           value={set.weight}
           onChange={(e) => setSet((s) => ({ ...s, weight: parseFloat(e.target.value) || 0 }))}
         />
-        <TextInput
-          label="Reps"
-          type="number"
-          min={1}
-          value={set.reps}
-          onChange={(e) => setSet((s) => ({ ...s, reps: parseInt(e.target.value, 10) || 0 }))}
-        />
+        {unit === "reps" ? (
+          <TextInput
+            label="Reps"
+            type="number"
+            min={1}
+            value={set.reps}
+            onChange={(e) => setSet((s) => ({ ...s, reps: parseInt(e.target.value, 10) || 0 }))}
+          />
+        ) : (
+          <TextInput
+            label="Time (s)"
+            type="number"
+            min={1}
+            value={set.duration}
+            onChange={(e) => setSet((s) => ({ ...s, duration: parseInt(e.target.value, 10) || 0 }))}
+          />
+        )}
       </div>
       <Select
         label="RPE (optional)"

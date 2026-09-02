@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { WorkoutDay, PlannedExercise } from "@/lib/types";
 import { TextInput, Select, FormButton, FieldError } from "./primitives";
 import ExerciseForm, { ExerciseList } from "./ExerciseForm";
@@ -22,24 +22,40 @@ const EMPTY: Omit<WorkoutDay, "exercises"> = {
   isRestDay: false,
 };
 
+function firstAvailableDay(takenDays: number[]): number {
+  for (let dow = 0; dow <= 6; dow++) {
+    if (!takenDays.includes(dow)) return dow;
+  }
+  return 0;
+}
+
 export default function WorkoutDayForm({
   initial,
   onSave,
   submitting,
+  takenDays = [],
 }: {
   initial?: WorkoutDay;
   onSave: (day: WorkoutDay) => void;
   submitting?: boolean;
+  takenDays?: number[];
 }) {
   const [meta, setMeta] = useState<Omit<WorkoutDay, "exercises">>(
     initial
       ? { dayLabel: initial.dayLabel, category: initial.category ?? "", dayOfWeek: initial.dayOfWeek, isRestDay: initial.isRestDay }
-      : EMPTY
+      : { ...EMPTY, dayOfWeek: firstAvailableDay(takenDays) }
   );
   const [exercises, setExercises] = useState<PlannedExercise[]>(initial?.exercises ?? []);
   const [grouped, setGrouped] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const formSectionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (editingId && formSectionRef.current) {
+      formSectionRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [editingId]);
 
   const set = <K extends keyof Omit<WorkoutDay, "exercises">>(key: K, value: Omit<WorkoutDay, "exercises">[K]) => {
     setMeta((m) => ({ ...m, [key]: value }));
@@ -106,7 +122,13 @@ export default function WorkoutDayForm({
       <div className="grid grid-cols-2 gap-3">
         <Select
           label="Day of week"
-          options={DAY_OPTIONS}
+          options={DAY_OPTIONS.map((o) => {
+            const dow = parseInt(o.value, 10);
+            const isCurrent = meta.dayOfWeek === dow;
+            const isTaken = takenDays.includes(dow);
+            const editingOwnDay = Boolean(initial) && isCurrent;
+            return { ...o, disabled: isTaken && !editingOwnDay };
+          })}
           value={String(meta.dayOfWeek)}
           onChange={(e) => set("dayOfWeek", parseInt(e.target.value, 10))}
         />
@@ -140,7 +162,7 @@ export default function WorkoutDayForm({
             <span className="text-sm text-chalk">Edit exercises as supersets</span>
           </label>
 
-          <div className="rounded-[14px] bg-rubber p-4">
+          <div ref={formSectionRef} className="rounded-[14px] bg-rubber p-4">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
               {editingId ? "Edit exercise" : "Add exercise"}
             </p>
@@ -154,6 +176,7 @@ export default function WorkoutDayForm({
               </button>
             )}
             <ExerciseForm
+              key={editingId ?? "new"}
               onChange={addExercise}
               isGrouped={grouped}
               groupLabel={false}
