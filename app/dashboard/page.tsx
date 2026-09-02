@@ -34,7 +34,7 @@ function StatCard({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl bg-rubber p-3.5">
+    <div className="card-3d rounded-xl bg-rubber p-3.5">
       <div className="mb-1.5 flex items-center gap-1.5">
         {icon && <span className="text-chalk-dim">{icon}</span>}
         <p className="text-[11px] uppercase tracking-wide text-chalk-faint">{label}</p>
@@ -132,7 +132,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="mb-5 rounded-[14px] bg-rubber p-4">
+      <div className="card-3d mb-5 rounded-[14px] bg-rubber p-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs text-chalk-faint">This week</p>
           <span className="font-mono text-[11px] text-[#5DCAA5]">
@@ -154,7 +154,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="mb-5 rounded-2xl bg-rubber p-5">
+      <div className="card-3d mb-5 rounded-2xl bg-rubber p-5">
         <div className="mb-4">
           <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-chalk-faint">
             Today&apos;s workout
@@ -178,7 +178,7 @@ export default function DashboardPage() {
               {(todays.exercises ?? []).map((ex) => (
                 <div
                   key={ex.id}
-                  className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
+                  className="card-3d flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
                 >
                   <div>
                     <p className="text-sm font-medium text-chalk">{ex.name}</p>
@@ -218,7 +218,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      <div className="mb-5 rounded-[14px] bg-rubber p-4">
+      <div className="card-3d mb-5 rounded-[14px] bg-rubber p-4">
         <p className="mb-3 text-xs text-chalk-faint">Bench press · working weight (kg)</p>
         <div className="flex h-[90px] items-end gap-2">
           {(stats.benchProgression ?? []).map((h, i) => (
@@ -242,7 +242,7 @@ export default function DashboardPage() {
         {(stats.recentPRs ?? []).map((pr) => (
           <div
             key={pr.name}
-            className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
+            className="card-3d flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
           >
             <div>
               <p className="text-[13px] font-medium text-chalk">{pr.name}</p>
@@ -263,7 +263,7 @@ export default function DashboardPage() {
       </div>
       <div className="flex flex-col gap-3">
         {activeProgram && (
-          <div className="rounded-[14px] bg-rubber px-4.5 py-4">
+          <div className="card-3d rounded-[14px] bg-rubber px-4.5 py-4">
             <p className="mb-1 font-display text-[17px] font-semibold text-chalk">
               {activeProgram.name}
             </p>
@@ -281,7 +281,7 @@ export default function DashboardPage() {
         {!activeProgram && myWorkouts.length === 0 && (
           <Link
             href="/programs"
-            className="rounded-[14px] bg-rubber px-4.5 py-4 text-xs text-chalk-faint"
+            className="card-3d rounded-[14px] bg-rubber px-4.5 py-4 text-xs text-chalk-faint"
           >
             Create your first program →
           </Link>

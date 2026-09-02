@@ -275,7 +275,7 @@ export function ExerciseList({
       {exercises.map((ex, idx) => (
         <div
           key={ex.id}
-          className="rounded-[10px] bg-rubber-2 px-3.5 py-2.5"
+          className="card-3d rounded-[10px] bg-rubber-2 px-3.5 py-2.5"
         >
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">

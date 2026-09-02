@@ -167,7 +167,7 @@ function ExerciseStep({
 }) {
   return (
     <div>
-      <div className="rounded-[18px] bg-rubber px-5.5 py-7 text-center">
+      <div className="card-3d rounded-[18px] bg-rubber px-5.5 py-7 text-center">
         <p className="mb-2.5 font-mono text-[13px] font-bold tracking-wide text-plate-yellow">
           {step.groupLabel ? `${step.groupLabel} · ` : ""}SET {step.setNumber} OF{" "}
           {step.totalSets}
@@ -225,7 +225,7 @@ function ExerciseStep({
       </div>
 
       {nextStep && (
-        <div className="mt-4 flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3">
+        <div className="card-3d mt-4 flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3">
           <span className="text-[11px] uppercase tracking-wide text-chalk-faint">
             Up next
           </span>

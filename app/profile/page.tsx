@@ -57,6 +57,9 @@ export default function ProfilePage() {
     schedule: "Weekday",
   };
 
+  const displayName = profile.name || authUser?.name || "Athlete";
+  const displayInitials = profile.initials || displayName.slice(0, 2).toUpperCase();
+
   const showToast = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 2000);
@@ -93,23 +96,23 @@ export default function ProfilePage() {
 
   return (
     <div className="px-5 pt-2">
-      <div className="my-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-plate-blue-bg font-display text-xl font-semibold text-[#7FB2E8]">
-            {profile.initials}
+      <div className="my-3.5 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-plate-blue-bg font-display text-xl font-semibold text-[#7FB2E8]">
+            {displayInitials || "AT"}
           </div>
-          <div>
-            <p className="font-display text-[19px] font-semibold text-chalk">
-              {profile.name}
+          <div className="min-w-0">
+            <p className="truncate font-display text-[19px] font-semibold text-chalk">
+              {displayName}
             </p>
-            <p className="mt-0.5 text-xs text-chalk-faint">
-              Member since {profile.memberSince}
+            <p className="mt-0.5 truncate text-xs text-chalk-faint">
+              Member since {profile.memberSince || "Unknown"}
             </p>
           </div>
         </div>
         <button
           onClick={() => setEditingProfile(true)}
-          className="flex items-center gap-1.5 rounded-lg border border-plate-blue px-3 py-2 text-xs font-semibold text-[#7FB2E8]"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-plate-blue px-3 py-2 text-xs font-semibold text-[#7FB2E8]"
         >
           <IconUserEdit size={15} /> Edit
         </button>
@@ -192,7 +195,7 @@ function Row({
 }) {
   return (
     <div
-      className={`mb-2 flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3.5 ${
+      className={`card-3d mb-2 flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3.5 ${
         onClick ? "cursor-pointer active:bg-rubber-2" : ""
       }`}
       onClick={onClick}

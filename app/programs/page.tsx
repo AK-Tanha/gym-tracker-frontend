@@ -118,7 +118,7 @@ export default function ProgramsPage() {
           <p className="text-xs text-chalk-faint">No programs yet.</p>
         )}
         {myWorkouts.map((w) => (
-          <div key={w.id} className="rounded-[14px] bg-rubber px-4.5 py-4">
+          <div key={w.id} className="card-3d rounded-[14px] bg-rubber px-4.5 py-4">
             <div className="mb-1 flex items-center justify-between">
               <p className="font-display text-[17px] font-semibold text-chalk">
                 {w.name}
@@ -175,7 +175,7 @@ export default function ProgramsPage() {
             </div>
 
             {expanded === w.id && (
-              <div className="mt-4 rounded-[12px] bg-rubber-2 p-3.5">
+              <div className="card-3d mt-4 rounded-[12px] bg-rubber-2 p-3.5">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
                     Workout days
@@ -198,7 +198,7 @@ export default function ProgramsPage() {
                       .map((day) => (
                         <div
                           key={day.dayOfWeek}
-                          className="flex items-center justify-between rounded-[10px] bg-rubber px-3 py-2"
+                          className="card-3d flex items-center justify-between rounded-[10px] bg-rubber px-3 py-2"
                         >
                           <button
                             onClick={() => setViewingDay({ program: w, day })}
@@ -297,7 +297,7 @@ export default function ProgramsPage() {
                   (viewingDay.day.exercises ?? []).map((ex) => (
                     <div
                       key={ex.id}
-                      className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
+                      className="card-3d flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
                     >
                       <div>
                         <p className="text-sm font-medium text-chalk">{ex.name}</p>

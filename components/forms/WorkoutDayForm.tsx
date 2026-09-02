@@ -162,7 +162,7 @@ export default function WorkoutDayForm({
             <span className="text-sm text-chalk">Edit exercises as supersets</span>
           </label>
 
-          <div ref={formSectionRef} className="rounded-[14px] bg-rubber p-4">
+          <div ref={formSectionRef} className="card-3d rounded-[14px] bg-rubber p-4">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
               {editingId ? "Edit exercise" : "Add exercise"}
             </p>
@@ -185,7 +185,7 @@ export default function WorkoutDayForm({
             />
           </div>
 
-          <div className="rounded-[14px] bg-rubber p-4">
+          <div className="card-3d rounded-[14px] bg-rubber p-4">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
               Exercises ({exercises.length})
             </p>

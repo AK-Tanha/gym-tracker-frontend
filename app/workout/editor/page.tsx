@@ -73,7 +73,7 @@ export default function WorkoutEditorPage() {
       </div>
 
       {!activeProgram ? (
-        <div className="rounded-[14px] bg-rubber p-5 text-center">
+        <div className="card-3d rounded-[14px] bg-rubber p-5 text-center">
           <p className="mb-3 text-sm text-chalk-faint">
             Activate a program before building your week.
           </p>
@@ -85,7 +85,7 @@ export default function WorkoutEditorPage() {
           </button>
         </div>
       ) : days.length === 0 ? (
-        <div className="rounded-[14px] bg-rubber p-5 text-center">
+        <div className="card-3d rounded-[14px] bg-rubber p-5 text-center">
           <p className="mb-3 text-sm text-chalk-faint">
             No workout days yet. Create your first one.
           </p>
@@ -99,7 +99,7 @@ export default function WorkoutEditorPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {days.map((day) => (
-            <div key={day.dayOfWeek} className="rounded-[14px] bg-rubber px-4.5 py-4">
+            <div key={day.dayOfWeek} className="card-3d rounded-[14px] bg-rubber px-4.5 py-4">
               <div className="mb-1 flex items-center justify-between">
                 <p className="font-display text-[17px] font-semibold text-chalk">
                   {day.dayLabel} <span className="ml-1 text-xs font-sans font-normal text-chalk-dim">·</span>{" "}

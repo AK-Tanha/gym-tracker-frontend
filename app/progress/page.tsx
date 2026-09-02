@@ -50,7 +50,7 @@ export default function ProgressPage() {
         <StatCard label="New PRs" value={String(s.newPRs)} />
       </div>
 
-      <div className="mb-2 rounded-[14px] bg-rubber p-4">
+      <div className="card-3d mb-2 rounded-[14px] bg-rubber p-4">
         <p className="mb-3 text-xs text-chalk-faint">This week</p>
         <div className="flex gap-1.5">
           {s.weekStreak.map((done, i) => (
@@ -62,7 +62,7 @@ export default function ProgressPage() {
         </div>
       </div>
 
-      <div className="mb-2 rounded-[14px] bg-rubber p-4 pb-8">
+      <div className="card-3d mb-2 rounded-[14px] bg-rubber p-4 pb-8">
         <p className="mb-3 text-xs text-chalk-faint">
           Bench press · working weight (kg)
         </p>
@@ -88,7 +88,7 @@ export default function ProgressPage() {
         {s.recentPRs.map((pr) => (
           <div
             key={pr.name}
-            className="flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
+            className="card-3d flex items-center justify-between rounded-[10px] bg-rubber px-3.5 py-3"
           >
             <div>
               <p className="text-[13px] font-medium text-chalk">{pr.name}</p>
@@ -114,7 +114,7 @@ function StatCard({
   accent?: boolean;
 }) {
   return (
-    <div className="rounded-xl bg-rubber p-3.5">
+    <div className="card-3d rounded-xl bg-rubber p-3.5">
       <p className="mb-1.5 text-[11px] uppercase tracking-wide text-chalk-faint">
         {label}
       </p>
