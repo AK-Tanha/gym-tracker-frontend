@@ -90,6 +90,7 @@ export default function ProfilePage() {
 
   const submitWeight = async (weight: number, date: string) => {
     await logWeight.mutateAsync({ weight, date });
+    queryClient.invalidateQueries({ queryKey: queryKeys.progress });
     setLoggingWeight(false);
     showToast(`Logged ${weight}${profile.units}`);
   };
