@@ -1,25 +1,41 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { IconPlayerPlayFilled, IconArrowRight, IconPlus } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  IconPlayerPlayFilled,
+  IconPlus,
+  IconCircleCheck,
+  IconRotateClockwise2,
+} from "@tabler/icons-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys } from "@/lib/api";
 import { WorkoutDay, Program } from "@/lib/types";
-import { flattenDay } from "@/lib/flattenDay";
 import { getTodaysWorkout, todayName } from "@/lib/todayWorkout";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { Modal } from "@/components/forms/Modal";
+
+type LoggedEntry = {
+  exerciseName: string;
+  date: string;
+};
 
 const WEEK_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
 type ProgressStats = {
   workoutsDone: number;
   streakDays: number;
-  totalVolumeTonnes: number;
-  newPRs: number;
   weekStreak: boolean[];
-  benchProgression: number[];
-  recentPRs: { name: string; when: string; value: string }[];
+  chartExercise: string;
+  chartBars: { weight: number; height: number }[];
+  recentPRs: {
+    name: string;
+    when: string;
+    value: string;
+    previous: string;
+    improvement: string;
+  }[];
 };
 
 function StatCard({
@@ -48,7 +64,9 @@ function StatCard({
 
 export default function DashboardPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: session } = useSession();
+  const [confirmRedo, setConfirmRedo] = useState(false);
   const firstName = (session?.user?.name ?? "Athlete").split(" ")[0];
   const { data: activeProgram, isLoading: programLoading } = useQuery<Program>({
     queryKey: queryKeys.activeProgram,
@@ -59,6 +77,10 @@ export default function DashboardPage() {
     queryKey: queryKeys.progress,
     queryFn: () => api.get<ProgressStats>("/api/progress"),
   });
+  const { data: loggedData, isLoading: loggedLoading } = useQuery<{ entries: LoggedEntry[] }>({
+    queryKey: queryKeys.loggedSets,
+    queryFn: () => api.get("/api/logged-sets"),
+  });
   const { data: programsData, isLoading: programsLoading } = useQuery<{
     myWorkouts: Program[];
   }>({
@@ -66,23 +88,40 @@ export default function DashboardPage() {
     queryFn: () => api.get("/api/programs"),
   });
 
-  if (programLoading || statsLoading || programsLoading) {
+  const todays = todaysWorkout ?? ({} as WorkoutDay);
+  const stats = progressStats ?? ({} as ProgressStats);
+  const myWorkouts = programsData?.myWorkouts ?? [];
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todaysLoggedSets = (loggedData?.entries ?? []).filter((e) => e.date === todayStr);
+  const plannedNames = (todays.exercises ?? []).map((ex) => ex.name);
+  const todayWorkoutDone =
+    plannedNames.length > 0 &&
+    plannedNames.every((name) => todaysLoggedSets.some((s) => s.exerciseName === name));
+
+  const totalSets = todays.exercises?.reduce((sum, e) => sum + e.sets, 0) ?? 0;
+  const estMinutes = Math.round(totalSets * 3.2);
+  const weekdayName = todayName(todays.dayOfWeek);
+
+  const handleRedoWorkout = async () => {
+    setConfirmRedo(false);
+    try {
+      await api.delete("/api/logged-sets");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.loggedSets });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.progress });
+    } catch {
+      // ignore reset failure and proceed
+    }
+    router.push("/workout");
+  };
+
+  if (programLoading || statsLoading || programsLoading || loggedLoading) {
     return (
       <div className="flex h-full items-center justify-center px-5 pt-2">
         <p className="text-sm text-chalk-faint">Loading…</p>
       </div>
     );
   }
-
-  const todays = todaysWorkout ?? ({} as WorkoutDay);
-  const stats = progressStats ?? ({} as ProgressStats);
-  const myWorkouts = programsData?.myWorkouts ?? [];
-
-  const totalSets = todays.exercises?.reduce((sum, e) => sum + e.sets, 0) ?? 0;
-  const estMinutes = Math.round(totalSets * 3.2);
-  const weekdayName = todayName(todays.dayOfWeek);
-  const queue = flattenDay(todays.exercises ?? []);
-  const completedSets = queue.filter((s) => s.type === "exercise").length;
 
   return (
     <div className="px-5 pt-2">
@@ -93,7 +132,13 @@ export default function DashboardPage() {
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display text-[28px] font-bold text-chalk">
-              Good morning, {firstName}
+              {(() => {
+                const h = new Date().getHours();
+                if (h < 12) return `Good morning, ${firstName}`;
+                if (h < 17) return `Good afternoon, ${firstName}`;
+                if (h < 21) return `Good evening, ${firstName}`;
+                return `Good night, ${firstName}`;
+              })()}
             </h1>
             <p className="mt-0.5 text-sm text-chalk-faint">
               {todaysWorkout
@@ -118,17 +163,6 @@ export default function DashboardPage() {
           value={`${stats.streakDays ?? 0} days`}
           accent
           icon={<span className="text-[16px]">⚡</span>}
-        />
-        <StatCard
-          label="Volume"
-          value={`${stats.totalVolumeTonnes ?? 0}t`}
-          icon={<span className="text-[16px]">🏋️</span>}
-        />
-        <StatCard
-          label="New PRs"
-          value={String(stats.newPRs ?? 0)}
-          accent
-          icon={<span className="text-[16px]">🪜</span>}
         />
       </div>
 
@@ -164,7 +198,7 @@ export default function DashboardPage() {
           </h2>
           {todaysWorkout ? (
             <p className="mt-0.5 text-xs text-chalk-faint">
-              {totalSets} sets · ~{estMinutes} min · {completedSets} steps
+              {totalSets} sets · ~{estMinutes} min · {todaysLoggedSets.length}/{totalSets} sets logged
             </p>
           ) : (
             <p className="mt-0.5 text-xs text-chalk-faint">
@@ -196,13 +230,32 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => router.push("/workout")}
-              className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-plate-red py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white active:scale-[0.98]"
-            >
-              <IconPlayerPlayFilled size={16} />
-              Start workout
-            </button>
+            {todayWorkoutDone ? (
+              <>
+                <button
+                  disabled
+                  className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-plate-green py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white opacity-70"
+                >
+                  <IconCircleCheck size={16} />
+                  Completed
+                </button>
+                <button
+                  onClick={() => setConfirmRedo(true)}
+                  className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] border border-rubber-2 py-3 text-sm font-semibold text-chalk-dim"
+                >
+                  <IconRotateClockwise2 size={15} />
+                  Redo workout
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => router.push("/workout")}
+                className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-plate-red py-4 font-display text-[15px] font-semibold uppercase tracking-wide text-white active:scale-[0.98]"
+              >
+                <IconPlayerPlayFilled size={16} />
+                Start workout
+              </button>
+            )}
           </>
         )}
         <button
@@ -218,25 +271,59 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      <div className="card-3d mb-5 rounded-[14px] bg-rubber p-4">
-        <p className="mb-3 text-xs text-chalk-faint">Bench press · working weight (kg)</p>
-        <div className="flex h-[90px] items-end gap-2">
-          {(stats.benchProgression ?? []).map((h, i) => (
-            <div key={i} className="relative flex-1">
-              <div
-                className="rounded-t bg-plate-blue"
-                style={{ height: `${h}%` }}
-              />
-              <span className="absolute -bottom-4.5 left-0 right-0 text-center font-mono text-[10px] text-chalk-faint">
-                W{i + 1}
+      {stats.chartExercise && stats.chartBars.length > 0 && (() => {
+        const weights = stats.chartBars.map((b) => b.weight);
+        const best = Math.max(...weights);
+        const change = weights[weights.length - 1] - weights[0];
+        return (
+          <div className="card-3d mb-5 rounded-[14px] bg-rubber p-4">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-xs text-chalk-faint">
+                {stats.chartExercise} · weekly max
+              </p>
+              <span className="font-mono text-[11px] font-bold text-plate-yellow">
+                {best}kg best
               </span>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="mb-3 flex items-center gap-1.5">
+              <span
+                className={`rounded-md px-2 py-0.5 font-mono text-[11px] font-bold ${
+                  change > 0
+                    ? "bg-plate-green/15 text-[#5DCAA5]"
+                    : change < 0
+                      ? "bg-plate-red/15 text-[#E8B923]"
+                      : "bg-rubber-2 text-chalk-faint"
+                }`}
+              >
+                {change > 0 ? "▲" : change < 0 ? "▼" : "—"} {change > 0 ? "+" : ""}
+                {change}kg
+              </span>
+              <span className="text-[11px] text-chalk-faint">
+                from week 1 to week {stats.chartBars.length}
+              </span>
+            </div>
+            <div className="mt-4 flex h-[90px] items-end gap-2">
+              {stats.chartBars.map((bar, i) => (
+                <div key={i} className="relative flex-1">
+                  <div
+                    className={`rounded-t ${bar.weight === best ? "bg-plate-green" : "bg-plate-blue"}`}
+                    style={{ height: `${bar.height}%` }}
+                  />
+                  <span className="absolute -top-4 left-0 right-0 text-center font-mono text-[9px] text-chalk-dim">
+                    {bar.weight > 0 ? bar.weight : ""}
+                  </span>
+                  <span className="absolute -bottom-4.5 left-0 right-0 text-center font-mono text-[10px] text-chalk-faint">
+                    W{i + 1}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="mb-2.5 mt-5 text-[13px] font-semibold text-chalk-dim">
-        Recent PRs
+        New personal bests
       </div>
       <div className="flex flex-col gap-2">
         {(stats.recentPRs ?? []).map((pr) => (
@@ -248,11 +335,18 @@ export default function DashboardPage() {
               <p className="text-[13px] font-medium text-chalk">{pr.name}</p>
               <p className="mt-0.5 text-[11px] text-chalk-faint">{pr.when}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[15px] font-bold text-plate-yellow">
-                {pr.value}
+            <div className="flex items-center gap-2.5">
+              <div className="text-right">
+                <p className="font-mono text-[15px] font-bold text-plate-yellow">
+                  {pr.value}
+                </p>
+                <p className="font-mono text-[10px] text-chalk-faint">
+                  prev {pr.previous}
+                </p>
+              </div>
+              <span className="rounded-md bg-plate-green/15 px-2 py-1 font-mono text-[10px] font-bold text-[#5DCAA5]">
+                {pr.improvement}
               </span>
-              <IconArrowRight size={14} className="text-chalk-faint" />
             </div>
           </div>
         ))}
@@ -287,6 +381,31 @@ export default function DashboardPage() {
           </Link>
         )}
       </div>
+
+      <Modal
+        open={confirmRedo}
+        onClose={() => setConfirmRedo(false)}
+        title="Redo today's workout?"
+      >
+        <p className="mb-5 text-sm leading-relaxed text-chalk-faint">
+          This will clear today&apos;s logged sets and start a fresh workout. Your previous
+          progress for today will be removed.
+        </p>
+        <div className="flex gap-2.5">
+          <button
+            onClick={() => setConfirmRedo(false)}
+            className="flex-1 rounded-[10px] border border-rubber-2 py-3.5 text-sm font-semibold text-chalk-dim"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleRedoWorkout}
+            className="flex-1 rounded-[10px] bg-plate-red py-3.5 font-display text-sm font-semibold uppercase tracking-wide text-white"
+          >
+            Yes, redo
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { Modal } from "@/components/forms/Modal";
 import ProgramForm from "@/components/forms/ProgramForm";
 import WorkoutDayForm from "@/components/forms/WorkoutDayForm";
 import { FormButton } from "@/components/forms/primitives";
-import { DAY_NAMES } from "@/lib/todayWorkout";
+import { DAY_NAMES, sortWorkoutDays } from "@/lib/todayWorkout";
 import { IconPlus, IconPencil, IconTrash, IconChevronDown } from "@tabler/icons-react";
 
 export default function ProgramsPage() {
@@ -74,7 +74,7 @@ export default function ProgramsPage() {
       ? days.map((d) => (d.dayOfWeek === day.dayOfWeek ? day : d))
       : [...days, day];
     await api.put(`/api/programs/${program.id}`, {
-      workoutDays: updatedDays.sort((a, b) => a.dayOfWeek - b.dayOfWeek),
+      workoutDays: sortWorkoutDays(updatedDays),
     });
     await invalidate(queryKeys.programs, queryKeys.activeProgram);
     setDayTarget(null);
@@ -192,10 +192,7 @@ export default function ProgramsPage() {
                   <p className="text-xs text-chalk-faint">No workout days yet.</p>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {(w.workoutDays ?? [])
-                      .slice()
-                      .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-                      .map((day) => (
+                    {sortWorkoutDays(w.workoutDays ?? []).map((day) => (
                         <div
                           key={day.dayOfWeek}
                           className="card-3d flex items-center justify-between rounded-[10px] bg-rubber px-3 py-2"

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, queryKeys, useApiInvalidations } from "@/lib/api";
 import { Program, WorkoutDay } from "@/lib/types";
+import { sortWorkoutDays, DAY_NAMES } from "@/lib/todayWorkout";
 import { Modal } from "@/components/forms/Modal";
 import WorkoutDayForm from "@/components/forms/WorkoutDayForm";
 import { IconPlus, IconPencil, IconTrash } from "@tabler/icons-react";
@@ -20,19 +21,19 @@ export default function WorkoutEditorPage() {
     queryFn: () => api.get<Program>("/api/programs/active"),
   });
 
-  const days = activeProgram?.workoutDays ?? [];
+  const days = sortWorkoutDays(activeProgram?.workoutDays ?? []);
 
   const handleSave = async (day: WorkoutDay) => {
     if (!activeProgram) return;
     const cached = queryClient.getQueryData<Program>(queryKeys.activeProgram);
     const current = cached?.workoutDays ? cached : activeProgram;
-    const days = current.workoutDays ?? [];
-    const exists = days.some((d) => d.dayOfWeek === day.dayOfWeek);
+    const currentDays = current.workoutDays ?? [];
+    const exists = currentDays.some((d) => d.dayOfWeek === day.dayOfWeek);
     const updatedDays = exists
-      ? days.map((d) => (d.dayOfWeek === day.dayOfWeek ? day : d))
-      : [...days, day];
+      ? currentDays.map((d) => (d.dayOfWeek === day.dayOfWeek ? day : d))
+      : [...currentDays, day];
     await api.put(`/api/programs/${activeProgram.id}`, {
-      workoutDays: updatedDays.sort((a, b) => a.dayOfWeek - b.dayOfWeek),
+      workoutDays: sortWorkoutDays(updatedDays),
     });
     await invalidate(queryKeys.programs, queryKeys.activeProgram);
     setEditing(null);
@@ -102,9 +103,10 @@ export default function WorkoutEditorPage() {
             <div key={day.dayOfWeek} className="card-3d rounded-[14px] bg-rubber px-4.5 py-4">
               <div className="mb-1 flex items-center justify-between">
                 <p className="font-display text-[17px] font-semibold text-chalk">
-                  {day.dayLabel} <span className="ml-1 text-xs font-sans font-normal text-chalk-dim">·</span>{" "}
+                  {day.dayLabel}{" "}
+                  <span className="ml-1 text-xs font-sans font-normal text-chalk-dim">·</span>{" "}
                   <span className="text-xs font-sans font-normal text-chalk-faint">
-                    Day {day.dayOfWeek}
+                    {DAY_NAMES[day.dayOfWeek] ?? "Today"}
                   </span>
                 </p>
                 <div className="flex gap-1">

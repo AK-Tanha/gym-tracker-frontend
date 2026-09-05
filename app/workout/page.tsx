@@ -3,12 +3,13 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { IconX } from "@tabler/icons-react";
+import { IconX, IconList } from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
 import { Program } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 import { getTodaysWorkout } from "@/lib/todayWorkout";
 import LogSetForm, { LoggedSet } from "@/components/forms/LogSetForm";
+import { Modal } from "@/components/forms/Modal";
 
 export default function WorkoutRunnerPage() {
   const router = useRouter();
@@ -25,7 +26,39 @@ export default function WorkoutRunnerPage() {
   );
   const [index, setIndex] = useState(0);
   const [logging, setLogging] = useState(false);
+  const [showOverview, setShowOverview] = useState(false);
   const loggedSetsRef = useRef<LoggedSet[]>([]);
+
+  const overview = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        muscleGroup: string;
+        groupLabel?: string;
+        sets: { setNumber: number; totalSets: number; index: number }[];
+      }
+    >();
+    queue.forEach((s, i) => {
+      if (s.type !== "exercise") return;
+      const existing = groups.get(s.exerciseId);
+      const group = existing ?? {
+        id: s.exerciseId,
+        name: s.exerciseName,
+        muscleGroup: s.muscleGroup,
+        groupLabel: s.groupLabel,
+        sets: [],
+      };
+      group.sets.push({ setNumber: s.setNumber, totalSets: s.totalSets, index: i });
+      groups.set(s.exerciseId, group);
+    });
+    return [...groups.values()];
+  }, [queue]);
+  const exerciseSteps = queue.filter((s) => s.type === "exercise");
+  const totalSets = exerciseSteps.length;
+  const doneSets = queue.slice(0, index).filter((s) => s.type === "exercise").length;
+  const progressPct = totalSets > 0 ? Math.round((doneSets / totalSets) * 100) : 0;
 
   const persistLoggedSets = useCallback(async (sets: LoggedSet[]) => {
     if (sets.length === 0) return;
@@ -47,6 +80,7 @@ export default function WorkoutRunnerPage() {
       }));
       await api.post("/api/logged-sets", { entries });
       queryClient.invalidateQueries({ queryKey: queryKeys.progress });
+      queryClient.invalidateQueries({ queryKey: queryKeys.loggedSets });
     } catch {
       // silently fail — sets are still tracked locally
     }
@@ -124,13 +158,38 @@ export default function WorkoutRunnerPage() {
 
   return (
     <div className="px-5 pt-2">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <span className="font-mono text-xs text-chalk-faint">
           {(todaysWorkout?.dayLabel ?? "").toUpperCase()}
         </span>
         <button onClick={() => router.push("/dashboard")} aria-label="End workout">
           <IconX size={20} className="text-chalk-faint" />
         </button>
+      </div>
+
+      <div className="card-3d mb-5 rounded-[12px] bg-rubber p-3.5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[11px] uppercase tracking-wide text-chalk-faint">
+            Today&apos;s workout
+          </span>
+          <div className="flex items-center gap-2.5">
+            <span className="font-mono text-[11px] font-bold text-chalk">
+              {doneSets}/{totalSets} sets
+            </span>
+            <button
+              onClick={() => setShowOverview(true)}
+              className="flex items-center gap-1 text-[11px] font-semibold text-[#7FB2E8]"
+            >
+              <IconList size={14} /> View all
+            </button>
+          </div>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-rubber-2">
+          <div
+            className="h-full rounded-full bg-plate-green transition-all duration-300"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
       </div>
 
       {step.type === "exercise" ? (
@@ -148,6 +207,60 @@ export default function WorkoutRunnerPage() {
       ) : (
         <RestStep key={index} step={step} onDone={() => setIndex((i) => i + 1)} />
       )}
+
+      <Modal
+        open={showOverview}
+        onClose={() => setShowOverview(false)}
+        title="Today's workout"
+      >
+        <div className="flex flex-col gap-4">
+          {overview.map((g) => (
+            <div key={g.id}>
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-chalk">{g.name}</p>
+                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-chalk-faint">
+                    {g.muscleGroup}
+                  </p>
+                </div>
+                {g.groupLabel && (
+                  <span className="font-mono text-[10px] font-bold text-plate-yellow">
+                    {g.groupLabel}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {g.sets.map((set) => {
+                  const done = set.index < index;
+                  const current = set.index === index;
+                  return (
+                    <span
+                      key={set.index}
+                      className={`rounded-md px-2.5 py-1.5 font-mono text-[11px] font-bold ${
+                        done
+                          ? "bg-plate-green text-white"
+                          : current
+                            ? "border border-plate-yellow text-plate-yellow"
+                            : "bg-rubber-2 text-chalk-faint"
+                      }`}
+                    >
+                      {set.setNumber}/{set.totalSets}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <div className="mt-1 flex items-center justify-between border-t border-rubber-2 pt-3">
+            <span className="text-[11px] uppercase tracking-wide text-chalk-faint">
+              Progress
+            </span>
+            <span className="font-mono text-[11px] font-bold text-[#5DCAA5]">
+              {doneSets}/{totalSets} sets · {progressPct}%
+            </span>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

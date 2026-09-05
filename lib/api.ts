@@ -33,6 +33,7 @@ export const queryKeys = {
   activeProgram: ["programs", "active"] as const,
   profile: ["profile"] as const,
   progress: ["progress"] as const,
+  loggedSets: ["logged-sets"] as const,
 };
 
 export function useApiQuery<T>(url: string, options?: Partial<UseQueryOptions<T, Error>>) {

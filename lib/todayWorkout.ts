@@ -19,3 +19,10 @@ export function getTodaysWorkout(program?: Program): WorkoutDay | undefined {
 export function todayName(dow?: number): string {
   return DAY_NAMES[dow ?? new Date().getDay()] ?? "Today";
 }
+
+export function sortWorkoutDays(days: WorkoutDay[]): WorkoutDay[] {
+  const weekStart = 6; // Saturday
+  return [...days].sort(
+    (a, b) => ((a.dayOfWeek - weekStart + 7) % 7) - ((b.dayOfWeek - weekStart + 7) % 7)
+  );
+}
