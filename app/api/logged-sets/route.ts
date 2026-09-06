@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, stringIdFilter, stripMongoId } from "@/lib/mongodb";
+import { currentAthleteId, userScopedId } from "@/lib/auth";
 
 type LoggedSetEntry = {
   id: string;
@@ -16,12 +17,13 @@ type LoggedSetEntry = {
   date: string;
 };
 
-const DOC_ID = "logged-sets";
-
 export async function GET() {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const col = await getCollection("logged-sets");
-    const doc = await col.findOne(stringIdFilter(DOC_ID));
+    const doc = await col.findOne(stringIdFilter(userScopedId("logged-sets", userId)));
     if (doc) return NextResponse.json(stripMongoId(doc));
     return NextResponse.json({ entries: [] });
   } catch {
@@ -31,12 +33,16 @@ export async function GET() {
 
 export async function DELETE() {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const today = new Date().toISOString().slice(0, 10);
     const col = await getCollection("logged-sets");
-    const doc = await col.findOne(stringIdFilter(DOC_ID));
+    const docId = stringIdFilter(userScopedId("logged-sets", userId));
+    const doc = await col.findOne(docId);
     const entries = (doc?.entries ?? []) as LoggedSetEntry[];
     await col.updateOne(
-      stringIdFilter(DOC_ID),
+      docId,
       { $set: { entries: entries.filter((e) => e.date !== today) } },
       { upsert: true }
     );
@@ -48,10 +54,13 @@ export async function DELETE() {
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const body = (await request.json()) as { entries: LoggedSetEntry[] };
     const col = await getCollection("logged-sets");
     await col.updateOne(
-      stringIdFilter(DOC_ID),
+      stringIdFilter(userScopedId("logged-sets", userId)),
       {
         $push: { entries: { $each: body.entries } },
       } as unknown as Parameters<typeof col.updateOne>[1],

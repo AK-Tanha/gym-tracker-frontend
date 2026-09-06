@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, stringIdFilter, stripMongoId } from "@/lib/mongodb";
-import { auth } from "@/lib/auth";
+import { auth, currentAthleteId, userScopedId } from "@/lib/auth";
 
 const defaultProfile = {
-  name: "AK Tanha",
-  memberSince: "Jan 2026",
-  initials: "AK",
+  name: "Athlete",
+  memberSince: "",
+  initials: "AT",
   reminders: true,
   units: "kg",
   schedule: "Weekday",
@@ -20,9 +20,13 @@ function monthYear(date: Date | string | undefined) {
 
 export async function GET() {
   try {
+    const userId = await currentAthleteId();
     const session = await auth();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const profileCol = await getCollection("profile");
-    const profile = await profileCol.findOne(stringIdFilter("profile"));
+    const docId = userScopedId("profile", userId);
+    const profile = await profileCol.findOne(stringIdFilter(docId));
     const base = profile ? stripMongoId(profile) : { ...defaultProfile };
 
     let memberSince: string | undefined = base.memberSince;
@@ -41,13 +45,13 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const body = await request.json();
     const profileCol = await getCollection("profile");
-    await profileCol.updateOne(
-      stringIdFilter("profile"),
-      { $set: body },
-      { upsert: true }
-    );
+    const docId = userScopedId("profile", userId);
+    await profileCol.updateOne(stringIdFilter(docId), { $set: body }, { upsert: true });
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });

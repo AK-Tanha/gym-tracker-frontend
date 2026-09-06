@@ -1,20 +1,40 @@
 import { auth } from "@/lib/auth";
 
+const ATHLETE_PAGES = ["/dashboard", "/programs", "/progress", "/workout", "/profile"];
+
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
+  const role = req.auth?.user?.role;
+  const isSuperadmin = role === "superadmin";
 
   const isAuthPage =
     nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/signup");
 
-  // Authenticated users hitting auth pages go to the dashboard.
+  // Authenticated users hitting auth pages go to the appropriate home.
   if (isAuthPage && isLoggedIn) {
-    return Response.redirect(new URL("/dashboard", nextUrl));
+    const home = isSuperadmin ? "/admin" : "/dashboard";
+    return Response.redirect(new URL(home, nextUrl));
+  }
+
+  // Superadmins get sent to the admin panel when they land on athlete pages.
+  const isAthletePage = ATHLETE_PAGES.some(
+    (p) => nextUrl.pathname === p || nextUrl.pathname.startsWith(`${p}/`)
+  );
+  if (isSuperadmin && isAthletePage) {
+    return Response.redirect(new URL("/admin", nextUrl));
   }
 
   // Unauthenticated users are sent to the login page for everything else.
   if (!isLoggedIn && !isAuthPage) {
     return Response.redirect(new URL("/login", nextUrl));
+  }
+
+  // Superadmin-only pages: non-superadmins get bounced to dashboard.
+  const isAdminPage =
+    nextUrl.pathname.startsWith("/admin") || nextUrl.pathname.startsWith("/api/superadmin");
+  if (isAdminPage && !isSuperadmin) {
+    return Response.redirect(new URL("/dashboard", nextUrl));
   }
 
   return undefined;

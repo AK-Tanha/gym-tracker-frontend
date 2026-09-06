@@ -1,18 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { requireSuperadmin } from "@/lib/auth";
 import { getCollection } from "@/lib/mongodb";
 
-const registerSchema = z.object({
+export async function GET() {
+  const session = await requireSuperadmin();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const users = await getCollection("users");
+    const docs = await users.find({}).sort({ _id: -1 }).toArray();
+
+    const safe = docs.map(({ passwordHash: _ph, ...rest }) => {
+      void _ph;
+      return rest;
+    });
+    return NextResponse.json({ users: safe });
+  } catch (err) {
+    console.error("Admin users list error:", err);
+    return NextResponse.json({ error: "Failed to list users." }, { status: 500 });
+  }
+}
+
+const createUserSchema = z.object({
   name: z.string().min(2).max(60),
   email: z.string().email(),
   password: z.string().min(8),
+  units: z.enum(["kg", "lbs"]).optional().default("kg"),
+  role: z.enum(["user", "superadmin"]).optional().default("user"),
 });
 
 export async function POST(request: NextRequest) {
+  const session = await requireSuperadmin();
+  if (!session) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
-    const parsed = registerSchema.safeParse(body);
+    const parsed = createUserSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Please provide a valid name, email, and password (8+ chars)." },
@@ -20,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, email, password } = parsed.data;
+    const { name, email, password, units, role } = parsed.data;
     const normalizedEmail = email.toLowerCase();
 
     const users = await getCollection("users");
@@ -48,8 +77,8 @@ export async function POST(request: NextRequest) {
       name: cleanedName,
       initials,
       passwordHash,
-      units: "kg",
-      role: "user",
+      units,
+      role,
       memberSince: new Date().toLocaleString("en-US", {
         month: "short",
         year: "numeric",
@@ -62,7 +91,7 @@ export async function POST(request: NextRequest) {
     void _ph;
     return NextResponse.json({ user: safe }, { status: 201 });
   } catch (err) {
-    console.error("Register error:", err);
-    return NextResponse.json({ error: "Failed to register." }, { status: 500 });
+    console.error("Admin create user error:", err);
+    return NextResponse.json({ error: "Failed to create user." }, { status: 500 });
   }
 }

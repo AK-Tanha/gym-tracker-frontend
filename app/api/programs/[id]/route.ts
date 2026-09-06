@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, stringIdFilter } from "@/lib/mongodb";
-
-const SETTINGS_ID = "programs";
+import { currentAthleteId, userScopedId } from "@/lib/auth";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const { id } = await params;
     const programsCol = await getCollection("programs");
-    const doc = await programsCol.findOne(stringIdFilter(SETTINGS_ID));
+    const doc = await programsCol.findOne(stringIdFilter(userScopedId("programs", userId)));
     const myWorkouts = doc?.myWorkouts ?? [];
     const program = myWorkouts.find((p: { id: string }) => p.id === id);
     if (program) {
@@ -27,18 +29,18 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const body = await request.json();
     const { id } = await params;
     const programsCol = await getCollection("programs");
-    const doc = await programsCol.findOne(stringIdFilter(SETTINGS_ID));
+    const docId = stringIdFilter(userScopedId("programs", userId));
+    const doc = await programsCol.findOne(docId);
     const myWorkouts = (doc?.myWorkouts ?? []).map((p: { id: string }) =>
       p.id === id ? { ...p, ...body, isOwn: true } : p
     );
-    await programsCol.updateOne(
-      stringIdFilter(SETTINGS_ID),
-      { $set: { myWorkouts } },
-      { upsert: true }
-    );
+    await programsCol.updateOne(docId, { $set: { myWorkouts } }, { upsert: true });
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Failed to update" }, { status: 500 });
@@ -50,17 +52,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const { id } = await params;
     const programsCol = await getCollection("programs");
-    const doc = await programsCol.findOne(stringIdFilter(SETTINGS_ID));
+    const docId = stringIdFilter(userScopedId("programs", userId));
+    const doc = await programsCol.findOne(docId);
     const myWorkouts = (doc?.myWorkouts ?? []).filter(
       (p: { id: string }) => p.id !== id
     );
-    await programsCol.updateOne(
-      stringIdFilter(SETTINGS_ID),
-      { $set: { myWorkouts } },
-      { upsert: true }
-    );
+    await programsCol.updateOne(docId, { $set: { myWorkouts } }, { upsert: true });
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 });

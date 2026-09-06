@@ -9,8 +9,10 @@ import {
   IconLogout,
   IconChevronRight,
   IconUserEdit,
+  IconShield,
 } from "@tabler/icons-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { api, useApiMutation, queryKeys } from "@/lib/api";
@@ -30,6 +32,7 @@ type Profile = {
 
 export default function ProfilePage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { data: session } = useSession();
   const [toast, setToast] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -152,6 +155,14 @@ export default function ProfilePage() {
       />
 
       <SectionLabel>Account</SectionLabel>
+      {authUser?.role === "superadmin" && (
+        <Row
+          icon={IconShield}
+          label="Guardian panel"
+          chevron
+          onClick={() => router.push("/admin")}
+        />
+      )}
       <Row icon={IconLogout} label="Sign out" chevron onClick={() => logoutAction()} />
 
       <Modal open={editingProfile} onClose={() => setEditingProfile(false)} title="Edit profile">

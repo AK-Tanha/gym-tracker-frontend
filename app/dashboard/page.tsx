@@ -67,7 +67,8 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const [confirmRedo, setConfirmRedo] = useState(false);
-  const firstName = (session?.user?.name ?? "Athlete").split(" ")[0];
+  const authName = session?.user?.name ?? "Athlete";
+  const isAdmin = session?.user?.role === "superadmin";
   const { data: activeProgram, isLoading: programLoading } = useQuery<Program>({
     queryKey: queryKeys.activeProgram,
     queryFn: () => api.get<Program>("/api/programs/active"),
@@ -134,13 +135,17 @@ export default function DashboardPage() {
             <h1 className="font-display text-[28px] font-bold text-chalk">
               {(() => {
                 const h = new Date().getHours();
-                if (h < 12) return `Good morning, ${firstName}`;
-                if (h < 17) return `Good afternoon, ${firstName}`;
-                if (h < 21) return `Good evening, ${firstName}`;
-                return `Good night, ${firstName}`;
+                const greeting =
+                  h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 21 ? "Good evening" : "Good night";
+                return `${greeting}, ${authName}`;
               })()}
             </h1>
             <p className="mt-0.5 text-sm text-chalk-faint">
+              {isAdmin && (
+                <span className="mr-1.5 inline-block rounded bg-plate-red/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-plate-red">
+                  SUPERADMIN
+                </span>
+              )}
               {todaysWorkout
                 ? `${todays.dayLabel}${todays.category ? ` · ${todays.category}` : ""}`
                 : `Rest day — no workout scheduled for ${weekdayName}`}

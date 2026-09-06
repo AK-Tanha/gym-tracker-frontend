@@ -2,22 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   IconLayoutDashboard,
   IconClipboardList,
   IconChartLine,
   IconUser,
+  IconShield,
 } from "@tabler/icons-react";
-
-const TABS = [
-  { href: "/dashboard", label: "Dashboard", icon: IconLayoutDashboard },
-  { href: "/programs", label: "Programs", icon: IconClipboardList },
-  { href: "/progress", label: "Progress", icon: IconChartLine },
-  { href: "/profile", label: "Profile", icon: IconUser },
-];
 
 export default function TabBar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   if (
     pathname.startsWith("/login") ||
@@ -26,9 +22,20 @@ export default function TabBar() {
     return null;
   }
 
+  const isAdmin = session?.user?.role === "superadmin";
+
+  const tabs = isAdmin
+    ? [{ href: "/admin", label: "Guardian", icon: IconShield }]
+    : [
+        { href: "/dashboard", label: "Dashboard", icon: IconLayoutDashboard },
+        { href: "/programs", label: "Programs", icon: IconClipboardList },
+        { href: "/progress", label: "Progress", icon: IconChartLine },
+        { href: "/profile", label: "Profile", icon: IconUser },
+      ];
+
   return (
     <nav className="fixed bottom-0 left-1/2 z-20 flex h-16 w-full max-w-md -translate-x-1/2 items-center justify-around border-t border-black bg-rubber">
-      {TABS.map(({ href, label, icon: Icon }) => {
+      {tabs.map(({ href, label, icon: Icon }) => {
         const isActive =
           href === "/dashboard"
             ? pathname === "/dashboard" || pathname.startsWith("/workout") || pathname === "/"

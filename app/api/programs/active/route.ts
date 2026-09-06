@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { getCollection, stringIdFilter, stripMongoId } from "@/lib/mongodb";
-
-const SETTINGS_ID = "programs";
+import { currentAthleteId, userScopedId } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json(null);
+
     const programsCol = await getCollection("programs");
-    const doc = await programsCol.findOne(stringIdFilter(SETTINGS_ID));
+    const doc = await programsCol.findOne(stringIdFilter(userScopedId("programs", userId)));
     const myWorkouts = doc?.myWorkouts ?? [];
     const active = myWorkouts.find((p: { isActive?: boolean }) => p.isActive);
     if (active) {

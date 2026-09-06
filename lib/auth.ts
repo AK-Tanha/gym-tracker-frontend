@@ -4,16 +4,20 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { getCollection } from "@/lib/mongodb";
 
+export type UserRole = "user" | "superadmin";
+
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
       units: string;
+      role: UserRole;
     } & DefaultSession["user"];
   }
 
   interface User {
     units?: string;
+    role?: UserRole;
   }
 }
 
@@ -25,6 +29,7 @@ type UserDoc = {
   initials: string;
   passwordHash: string;
   units: string;
+  role?: UserRole;
 };
 
 const credentialsSchema = z.object({
@@ -72,6 +77,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           units: user.units,
+          role: user.role ?? "user",
         };
       },
     }),
@@ -82,6 +88,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id;
         token.units = user.units;
         token.name = user.name;
+        token.role = user.role ?? "user";
       }
       return token;
     },
@@ -90,8 +97,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = (token.id as string) ?? "";
         session.user.units = (token.units as string) ?? "kg";
         session.user.name = (token.name as string) ?? session.user.name;
+        session.user.role = (token.role as UserRole) ?? "user";
       }
       return session;
     },
   },
 });
+
+export async function requireSuperadmin() {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "superadmin") {
+    return null;
+  }
+  return session;
+}
+
+// Returns the current authenticated user's id, or null if not logged in.
+// All user-scoped API routes should call this and 401 when it returns null.
+export async function currentUserId(): Promise<string | null> {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
+
+// Like currentUserId but refuses superadmin (guardian) accounts, since they
+// have no athlete data. Returns null for unauthenticated OR for superadmins.
+export async function currentAthleteId(): Promise<string | null> {
+  const session = await auth();
+  if (!session?.user) return null;
+  if (session.user.role === "superadmin") return null;
+  return session.user.id;
+}
+
+// Builds a per-user Mongo document key, e.g. "programs:u-xxxx".
+// Keeps the existing single-document-per-collection format but scopes it
+// to one document per user.
+export function userScopedId(prefix: string, userId: string): string {
+  return `${prefix}:${userId}`;
+}

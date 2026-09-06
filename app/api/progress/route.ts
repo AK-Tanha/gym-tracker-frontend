@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCollection, stringIdFilter } from "@/lib/mongodb";
+import { currentAthleteId, userScopedId } from "@/lib/auth";
 
 type LoggedSetEntry = {
   id: string;
@@ -35,8 +36,11 @@ function dateKey(d: Date): string {
 
 export async function GET() {
   try {
+    const userId = await currentAthleteId();
+    if (!userId) return NextResponse.json(EMPTY_RESPONSE);
+
     const loggedCol = await getCollection("logged-sets");
-    const logged = await loggedCol.findOne(stringIdFilter("logged-sets"));
+    const logged = await loggedCol.findOne(stringIdFilter(userScopedId("logged-sets", userId)));
     const entries = (logged?.entries ?? []) as LoggedSetEntry[];
 
     const byDay = new Map<string, { maxByExercise: Map<string, number> }>();
