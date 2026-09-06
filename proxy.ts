@@ -1,7 +1,5 @@
 import { auth } from "@/lib/auth";
 
-const ATHLETE_PAGES = ["/dashboard", "/programs", "/progress", "/workout", "/profile"];
-
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
@@ -15,14 +13,6 @@ export default auth((req) => {
   if (isAuthPage && isLoggedIn) {
     const home = isSuperadmin ? "/admin" : "/dashboard";
     return Response.redirect(new URL(home, nextUrl));
-  }
-
-  // Superadmins get sent to the admin panel when they land on athlete pages.
-  const isAthletePage = ATHLETE_PAGES.some(
-    (p) => nextUrl.pathname === p || nextUrl.pathname.startsWith(`${p}/`)
-  );
-  if (isSuperadmin && isAthletePage) {
-    return Response.redirect(new URL("/admin", nextUrl));
   }
 
   // Unauthenticated users are sent to the login page for everything else.

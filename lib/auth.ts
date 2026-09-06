@@ -119,13 +119,11 @@ export async function currentUserId(): Promise<string | null> {
   return session?.user?.id ?? null;
 }
 
-// Like currentUserId but refuses superadmin (guardian) accounts, since they
-// have no athlete data. Returns null for unauthenticated OR for superadmins.
+// Returns the current authenticated user's id, or null if not logged in.
+// Superadmins keep their own athlete data, so their id is returned too.
 export async function currentAthleteId(): Promise<string | null> {
   const session = await auth();
-  if (!session?.user) return null;
-  if (session.user.role === "superadmin") return null;
-  return session.user.id;
+  return session?.user?.id ?? null;
 }
 
 // Builds a per-user Mongo document key, e.g. "programs:u-xxxx".

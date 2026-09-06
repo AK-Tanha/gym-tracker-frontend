@@ -21,7 +21,7 @@ type LoggedEntry = {
   date: string;
 };
 
-const WEEK_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const WEEK_LABELS = ["S", "S", "M", "T", "W", "T", "F"];
 
 type ProgressStats = {
   workoutsDone: number;

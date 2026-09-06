@@ -9,12 +9,14 @@ import {
   IconX,
   IconEye,
   IconChevronRight,
+  IconLogout,
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, useApiMutation } from "@/lib/api";
 import { Modal } from "@/components/forms/Modal";
 import AdminUserForm from "@/components/forms/AdminUserForm";
+import { logoutAction } from "@/app/actions/auth";
 
 type User = {
   id: string;
@@ -203,6 +205,13 @@ export default function AdminPage() {
           className="flex items-center gap-1.5 rounded-lg bg-plate-green px-3 py-2 text-xs font-semibold text-white"
         >
           <IconUserPlus size={15} /> Add User
+        </button>
+        <button
+          onClick={() => logoutAction()}
+          className="flex items-center gap-1.5 rounded-lg bg-rubber-2 px-3 py-2 text-xs font-semibold text-chalk-dim transition hover:text-plate-red"
+          title="Sign out"
+        >
+          <IconLogout size={15} />
         </button>
       </div>
 

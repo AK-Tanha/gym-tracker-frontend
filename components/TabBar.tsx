@@ -24,14 +24,16 @@ export default function TabBar() {
 
   const isAdmin = session?.user?.role === "superadmin";
 
+  const athleteTabs = [
+    { href: "/dashboard", label: "Dashboard", icon: IconLayoutDashboard },
+    { href: "/programs", label: "Programs", icon: IconClipboardList },
+    { href: "/progress", label: "Progress", icon: IconChartLine },
+    { href: "/profile", label: "Profile", icon: IconUser },
+  ];
+
   const tabs = isAdmin
-    ? [{ href: "/admin", label: "Guardian", icon: IconShield }]
-    : [
-        { href: "/dashboard", label: "Dashboard", icon: IconLayoutDashboard },
-        { href: "/programs", label: "Programs", icon: IconClipboardList },
-        { href: "/progress", label: "Progress", icon: IconChartLine },
-        { href: "/profile", label: "Profile", icon: IconUser },
-      ];
+    ? [{ href: "/admin", label: "Guardian", icon: IconShield }, ...athleteTabs]
+    : athleteTabs;
 
   return (
     <nav className="fixed bottom-0 left-1/2 z-20 flex h-16 w-full max-w-md -translate-x-1/2 items-center justify-around border-t border-black bg-rubber">

@@ -60,6 +60,14 @@ export async function GET() {
     let streakDays = 0;
     const now = new Date();
     now.setUTCHours(0, 0, 0, 0);
+
+    // If today has no logged data, step back to the most recent day that does
+    // before starting the streak count — the streak isn't broken until a day
+    // with no data is skipped.
+    if (!byDay.has(dateKey(now))) {
+      now.setUTCDate(now.getUTCDate() - 1);
+    }
+
     for (let i = 0; i < 366; i++) {
       if (byDay.has(dateKey(now))) {
         streakDays++;
@@ -70,10 +78,10 @@ export async function GET() {
     }
 
     const today = new Date();
-    const mondayOffset = (today.getUTCDay() + 6) % 7;
+    const saturdayOffset = (today.getUTCDay() + 1) % 7;
     const weekStreak = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(today);
-      d.setUTCDate(today.getUTCDate() - (mondayOffset - i));
+      d.setUTCDate(today.getUTCDate() - (saturdayOffset - i));
       return byDay.has(dateKey(d));
     });
 
