@@ -40,6 +40,14 @@ export default function WorkoutRunnerPage() {
   const [pendingIdx, setPendingIdx] = useState<number | null>(null);
   const loggedSetsRef = useRef<LoggedSet[]>([]);
   const [pendingSets, setPendingSets] = useState<ExecutionStep[]>([]);
+  const [completedSets, setCompletedSets] = useState<Set<string>>(
+    () => new Set()
+  );
+  const stepKey = useCallback(
+    (s: ExecutionStep | undefined) =>
+      s?.type === "exercise" ? `${s.exerciseId}:${s.setNumber}` : "",
+    []
+  );
 
   const rebuildQueue = useCallback(
     (newOrder: PlannedExercise[], keepIndexFrom?: ExecutionStep) => {
@@ -58,19 +66,60 @@ export default function WorkoutRunnerPage() {
     []
   );
 
+  const groupSpan = useCallback((pos: number) => {
+    const ex = exerciseOrder[pos];
+    if (!ex?.groupId) return { start: pos, end: pos };
+    let start = pos;
+    let end = pos;
+    while (start > 0 && exerciseOrder[start - 1].groupId === ex.groupId) start--;
+    while (
+      end < exerciseOrder.length - 1 &&
+      exerciseOrder[end + 1].groupId === ex.groupId
+    )
+      end++;
+    return { start, end };
+  }, [exerciseOrder]);
+
   const reorderExercise = useCallback(
     (fromPos: number, toPos: number) => {
+      const from = groupSpan(fromPos);
+      const dir = toPos < fromPos ? -1 : 1;
+      const at = dir === -1 ? from.start - 1 : from.end + 1;
+      if (at < 0 || at >= exerciseOrder.length) return;
+      const other = groupSpan(at);
+      const start = Math.min(from.start, other.start);
+      const end = Math.max(from.end, other.end);
+      const block = exerciseOrder.slice(from.start, from.end + 1);
+      const neighbour = exerciseOrder.slice(other.start, other.end + 1);
       const next = [...exerciseOrder];
-      const [moved] = next.splice(fromPos, 1);
-      next.splice(toPos, 0, moved);
+      next.splice(start, end - start + 1);
+      next.splice(
+        start,
+        0,
+        ...(dir === -1 ? [...block, ...neighbour] : [...neighbour, ...block])
+      );
       setExerciseOrder(next);
       const currentStep = queue[index];
-      rebuildQueue(
-        next,
-        currentStep?.type === "exercise" ? currentStep : undefined
-      );
+      if (currentStep?.type !== "exercise") return;
+      if (dir === -1) {
+        rebuildQueue(next, currentStep);
+        return;
+      }
+      let targetSet = 1;
+      const target = neighbour[0];
+      while (
+        targetSet <= target.sets &&
+        completedSets.has(`${target.id}:${targetSet}`)
+      )
+        targetSet++;
+      rebuildQueue(next, {
+        type: "exercise",
+        exerciseId: target.id,
+        setNumber: targetSet,
+        totalSets: target.sets,
+      } as ExecutionStep);
     },
-    [exerciseOrder, queue, index, rebuildQueue]
+    [exerciseOrder, queue, index, rebuildQueue, groupSpan, completedSets]
   );
 
   const overview = useMemo(() => {
@@ -81,7 +130,12 @@ export default function WorkoutRunnerPage() {
         name: string;
         muscleGroup: string;
         groupLabel?: string;
-        sets: { setNumber: number; totalSets: number; index: number }[];
+        sets: {
+          setNumber: number;
+          totalSets: number;
+          index: number;
+          exerciseId: string;
+        }[];
       }
     >();
     queue.forEach((s, i) => {
@@ -94,14 +148,20 @@ export default function WorkoutRunnerPage() {
         groupLabel: s.groupLabel,
         sets: [],
       };
-      group.sets.push({ setNumber: s.setNumber, totalSets: s.totalSets, index: i });
+      group.sets.push({
+        setNumber: s.setNumber,
+        totalSets: s.totalSets,
+        index: i,
+        exerciseId: s.exerciseId,
+      });
       groups.set(s.exerciseId, group);
     });
     return [...groups.values()];
   }, [queue]);
   const exerciseSteps = queue.filter((s) => s.type === "exercise");
   const totalSets = exerciseSteps.length;
-  const doneSets = queue.slice(0, index).filter((s) => s.type === "exercise").length;
+  const doneSets = exerciseSteps.filter((s) => completedSets.has(stepKey(s)))
+    .length;
   const progressPct = totalSets > 0 ? Math.round((doneSets / totalSets) * 100) : 0;
 
   const persistLoggedSets = useCallback(async (sets: LoggedSet[]) => {
@@ -142,10 +202,11 @@ export default function WorkoutRunnerPage() {
         set.unit = step.unit ?? "reps";
       }
       loggedSetsRef.current.push(set);
+      setCompletedSets((prev) => new Set(prev).add(stepKey(step)));
       setLogging(false);
       setIndex((i) => i + 1);
     },
-    [step]
+    [step, stepKey]
   );
 
   const handleSkip = useCallback(() => {
@@ -167,11 +228,12 @@ export default function WorkoutRunnerPage() {
         set.unit = pendingStep.unit ?? "reps";
       }
       loggedSetsRef.current.push(set);
+      setCompletedSets((prev) => new Set(prev).add(stepKey(pendingStep)));
       setPendingSets((prev) => prev.filter((_, i) => i !== pendingIdx));
       setPendingIdx(null);
       persistLoggedSets([set]);
     },
-    [pendingIdx, pendingSets, persistLoggedSets]
+    [pendingIdx, pendingSets, persistLoggedSets, stepKey]
   );
 
   const dismissPending = useCallback((removeIdx: number) => {
@@ -331,21 +393,10 @@ export default function WorkoutRunnerPage() {
     );
   }
 
-  const canReorderUp = (pos: number) => {
-    if (pos <= 0) return false;
-    const cur = exerciseOrder[pos];
-    const prev = exerciseOrder[pos - 1];
-    if (cur.groupId && prev.groupId === cur.groupId) return false;
-    return true;
-  };
+  const canReorderUp = (pos: number) => pos >= 0 && groupSpan(pos).start > 0;
 
-  const canReorderDown = (pos: number) => {
-    if (pos >= exerciseOrder.length - 1) return false;
-    const cur = exerciseOrder[pos];
-    const next = exerciseOrder[pos + 1];
-    if (cur.groupId && next.groupId === cur.groupId) return false;
-    return true;
-  };
+  const canReorderDown = (pos: number) =>
+    pos >= 0 && groupSpan(pos).end < exerciseOrder.length - 1;
 
   return (
     <div className="px-5 pt-2">
@@ -431,8 +482,10 @@ export default function WorkoutRunnerPage() {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {g.sets.map((set) => {
-                  const done = set.index < index;
-                  const current = set.index === index;
+                  const done = completedSets.has(
+                    `${set.exerciseId}:${set.setNumber}`
+                  );
+                  const current = set.index === index && !done;
                   return (
                     <span
                       key={set.index}

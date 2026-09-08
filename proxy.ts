@@ -36,6 +36,6 @@ export const config = {
      * Match all request paths except:
      * - NextAuth auth API, registration, and public assets
      */
-    "/((?!api/auth|api/register|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+    "/((?!api/auth|api/register|_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:png|jpg|jpeg|svg|webp|ico|webmanifest)$).*)",
   ],
 };

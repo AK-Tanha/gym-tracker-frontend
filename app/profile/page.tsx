@@ -20,6 +20,7 @@ import { logoutAction } from "@/app/actions/auth";
 import { Modal } from "@/components/forms/Modal";
 import EditProfileForm, { ProfileInput } from "@/components/forms/EditProfileForm";
 import BodyWeightForm from "@/components/forms/BodyWeightForm";
+import InstallAppButton from "@/components/InstallAppButton";
 
 type Profile = {
   name: string;
@@ -164,6 +165,9 @@ export default function ProfilePage() {
         />
       )}
       <Row icon={IconLogout} label="Sign out" chevron onClick={() => logoutAction()} />
+
+      <SectionLabel>App</SectionLabel>
+      <InstallAppButton />
 
       <Modal open={editingProfile} onClose={() => setEditingProfile(false)} title="Edit profile">
         <EditProfileForm

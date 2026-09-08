@@ -72,11 +72,46 @@ export default function WorkoutDayForm({
     setError(null);
   };
 
+  const groupSpan = (list: PlannedExercise[], pos: number) => {
+    const ex = list[pos];
+    if (!ex?.groupId) return { start: pos, end: pos };
+    let start = pos;
+    let end = pos;
+    while (start > 0 && list[start - 1].groupId === ex.groupId) start--;
+    while (end < list.length - 1 && list[end + 1].groupId === ex.groupId) end++;
+    return { start, end };
+  };
+
   const reorder = (fromIndex: number, toIndex: number) => {
     setExercises((list) => {
+      const ex = list[fromIndex];
+      const dir = toIndex < fromIndex ? -1 : 1;
+      const adjacent = dir === -1 ? fromIndex - 1 : fromIndex + 1;
+      if (adjacent < 0 || adjacent >= list.length) return list;
+
+      // Reorder within a superset group: swap the two members.
+      if (ex.groupId && list[adjacent].groupId === ex.groupId) {
+        const next = [...list];
+        [next[fromIndex], next[adjacent]] = [next[adjacent], next[fromIndex]];
+        return next;
+      }
+
+      // Crossing a block boundary moves the whole superset group as a unit.
+      const from = groupSpan(list, fromIndex);
+      const at = dir === -1 ? from.start - 1 : from.end + 1;
+      if (at < 0 || at >= list.length) return list;
+      const other = groupSpan(list, at);
+      const start = Math.min(from.start, other.start);
+      const end = Math.max(from.end, other.end);
+      const block = list.slice(from.start, from.end + 1);
+      const neighbour = list.slice(other.start, other.end + 1);
       const next = [...list];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
+      next.splice(start, end - start + 1);
+      next.splice(
+        start,
+        0,
+        ...(dir === -1 ? [...block, ...neighbour] : [...neighbour, ...block])
+      );
       return next;
     });
   };
