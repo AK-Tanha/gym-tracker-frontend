@@ -3,9 +3,15 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { IconX, IconList } from "@tabler/icons-react";
+import {
+  IconX,
+  IconList,
+  IconArrowUp,
+  IconArrowDown,
+  IconAlertTriangle,
+} from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
-import { Program } from "@/lib/types";
+import { Program, ExecutionStep, PlannedExercise } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 import { getTodaysWorkout } from "@/lib/todayWorkout";
 import LogSetForm, { LoggedSet } from "@/components/forms/LogSetForm";
@@ -20,14 +26,52 @@ export default function WorkoutRunnerPage() {
   });
 
   const todaysWorkout = getTodaysWorkout(activeProgram);
-  const queue = useMemo(
-    () => (todaysWorkout ? flattenDay(todaysWorkout.exercises) : []),
-    [todaysWorkout]
+
+  const [exerciseOrder, setExerciseOrder] = useState<PlannedExercise[]>(
+    () => todaysWorkout?.exercises ?? []
+  );
+  const [queue, setQueue] = useState<ExecutionStep[]>(() =>
+    todaysWorkout ? flattenDay(todaysWorkout.exercises) : []
   );
   const [index, setIndex] = useState(0);
   const [logging, setLogging] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
+  const [showPending, setShowPending] = useState(false);
+  const [pendingIdx, setPendingIdx] = useState<number | null>(null);
   const loggedSetsRef = useRef<LoggedSet[]>([]);
+  const [pendingSets, setPendingSets] = useState<ExecutionStep[]>([]);
+
+  const rebuildQueue = useCallback(
+    (newOrder: PlannedExercise[], keepIndexFrom?: ExecutionStep) => {
+      const newQueue = flattenDay(newOrder);
+      setQueue(newQueue);
+      if (keepIndexFrom?.type === "exercise") {
+        const found = newQueue.findIndex(
+          (s) =>
+            s.type === "exercise" &&
+            s.exerciseId === keepIndexFrom.exerciseId &&
+            s.setNumber === keepIndexFrom.setNumber
+        );
+        if (found >= 0) setIndex(found);
+      }
+    },
+    []
+  );
+
+  const reorderExercise = useCallback(
+    (fromPos: number, toPos: number) => {
+      const next = [...exerciseOrder];
+      const [moved] = next.splice(fromPos, 1);
+      next.splice(toPos, 0, moved);
+      setExerciseOrder(next);
+      const currentStep = queue[index];
+      rebuildQueue(
+        next,
+        currentStep?.type === "exercise" ? currentStep : undefined
+      );
+    },
+    [exerciseOrder, queue, index, rebuildQueue]
+  );
 
   const overview = useMemo(() => {
     const groups = new Map<
@@ -104,6 +148,112 @@ export default function WorkoutRunnerPage() {
     [step]
   );
 
+  const handleSkip = useCallback(() => {
+    setLogging(false);
+    if (step?.type === "exercise") {
+      setPendingSets((s) => [...s, step]);
+    }
+    setIndex((i) => i + 1);
+  }, [step]);
+
+  const handleLogPending = useCallback(
+    (set: LoggedSet) => {
+      if (pendingIdx === null) return;
+      const pendingStep = pendingSets[pendingIdx];
+      if (pendingStep?.type === "exercise") {
+        set.exerciseName = pendingStep.exerciseName;
+        set.muscleGroup = pendingStep.muscleGroup;
+        set.setNumber = pendingStep.setNumber;
+        set.unit = pendingStep.unit ?? "reps";
+      }
+      loggedSetsRef.current.push(set);
+      setPendingSets((prev) => prev.filter((_, i) => i !== pendingIdx));
+      setPendingIdx(null);
+      persistLoggedSets([set]);
+    },
+    [pendingIdx, pendingSets, persistLoggedSets]
+  );
+
+  const dismissPending = useCallback((removeIdx: number) => {
+    setPendingSets((prev) => prev.filter((_, i) => i !== removeIdx));
+    setPendingIdx(null);
+  }, []);
+
+  const hasPending = pendingSets.length > 0;
+
+  const pendingModal = (
+    <Modal
+      open={showPending}
+      onClose={() => {
+        setShowPending(false);
+        setPendingIdx(null);
+      }}
+      title="Skipped sets"
+    >
+      {pendingSets.length === 0 ? (
+        <p className="text-sm text-chalk-faint">No skipped sets.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {pendingSets.map((ps, i) => {
+            if (ps.type !== "exercise") return null;
+            return (
+              <div
+                key={`${ps.exerciseId}-${ps.setNumber}-${i}`}
+                className="flex items-center justify-between rounded-[10px] bg-rubber-2 px-3.5 py-3"
+              >
+                {pendingIdx === i ? (
+                  <div className="w-full">
+                    <p className="mb-2 text-sm font-semibold text-chalk">
+                      {ps.exerciseName} · Set {ps.setNumber} of {ps.totalSets}
+                    </p>
+                    <LogSetForm
+                      unit={ps.unit ?? "reps"}
+                      suggestedWeight={ps.weight ?? 0}
+                      suggestedReps={ps.reps ?? 0}
+                      suggestedDuration={ps.duration ?? 0}
+                      onDone={handleLogPending}
+                    />
+                    <button
+                      onClick={() => setPendingIdx(null)}
+                      className="mt-2 w-full rounded-[10px] border border-rubber-2 py-2 text-xs font-semibold text-chalk-faint"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-sm font-semibold text-chalk">
+                        {ps.exerciseName}
+                      </p>
+                      <p className="font-mono text-[10px] uppercase tracking-wide text-chalk-faint">
+                        Set {ps.setNumber} of {ps.totalSets} · {ps.muscleGroup}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPendingIdx(i)}
+                        className="rounded-lg bg-plate-green px-3 py-1.5 text-[11px] font-semibold text-white"
+                      >
+                        Log
+                      </button>
+                      <button
+                        onClick={() => dismissPending(i)}
+                        className="rounded-lg border border-rubber-2 px-3 py-1.5 text-[11px] font-semibold text-chalk-faint"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
+  );
+
   useEffect(() => {
     if (queue.length > 0 && index >= queue.length) {
       persistLoggedSets(loggedSetsRef.current);
@@ -139,6 +289,7 @@ export default function WorkoutRunnerPage() {
 
   if (!step) {
     return (
+      <>
       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
         <h1 className="mb-2 font-display text-2xl font-semibold text-chalk">
           Workout complete
@@ -146,15 +297,55 @@ export default function WorkoutRunnerPage() {
         <p className="mb-6 text-sm text-chalk-faint">
           Nice work — {todaysWorkout?.dayLabel ?? "Today"} logged.
         </p>
+        {hasPending && (
+          <div className="card-3d mb-6 w-full rounded-[12px] bg-rubber p-4 text-left">
+            <div className="mb-2 flex items-center gap-2">
+              <IconAlertTriangle size={16} className="text-plate-yellow" />
+              <p className="text-sm font-semibold text-chalk">
+                {pendingSets.length} skipped set
+                {pendingSets.length === 1 ? "" : "s"} not logged
+              </p>
+            </div>
+            <p className="mb-4 text-xs text-chalk-faint">
+              You skipped {pendingSets.length}{" "}
+              {pendingSets.length === 1 ? "set" : "sets"} earlier. Log
+              them now or they&apos;ll be discarded.
+            </p>
+            <button
+              onClick={() => setShowPending(true)}
+              className="w-full rounded-[10px] bg-plate-green py-3 font-display text-sm font-semibold uppercase tracking-wide text-white"
+            >
+              Log skipped sets
+            </button>
+          </div>
+        )}
         <button
           onClick={() => router.push("/dashboard")}
-          className="rounded-[10px] bg-plate-green px-6 py-3 font-display text-sm font-semibold uppercase tracking-wide text-white"
+          className="rounded-[10px] border border-rubber-2 px-6 py-3 font-display text-sm font-semibold uppercase tracking-wide text-chalk"
         >
           Back to dashboard
         </button>
       </div>
+      {pendingModal}
+      </>
     );
   }
+
+  const canReorderUp = (pos: number) => {
+    if (pos <= 0) return false;
+    const cur = exerciseOrder[pos];
+    const prev = exerciseOrder[pos - 1];
+    if (cur.groupId && prev.groupId === cur.groupId) return false;
+    return true;
+  };
+
+  const canReorderDown = (pos: number) => {
+    if (pos >= exerciseOrder.length - 1) return false;
+    const cur = exerciseOrder[pos];
+    const next = exerciseOrder[pos + 1];
+    if (cur.groupId && next.groupId === cur.groupId) return false;
+    return true;
+  };
 
   return (
     <div className="px-5 pt-2">
@@ -176,6 +367,14 @@ export default function WorkoutRunnerPage() {
             <span className="font-mono text-[11px] font-bold text-chalk">
               {doneSets}/{totalSets} sets
             </span>
+            {hasPending && (
+              <button
+                onClick={() => setShowPending(true)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-plate-yellow"
+              >
+                Skipped ({pendingSets.length})
+              </button>
+            )}
             <button
               onClick={() => setShowOverview(true)}
               className="flex items-center gap-1 text-[11px] font-semibold text-[#7FB2E8]"
@@ -198,11 +397,12 @@ export default function WorkoutRunnerPage() {
           nextStep={nextStep}
           logging={logging}
           onLogToggle={() => setLogging((l) => !l)}
-          onDone={() => {
-            setLogging(false);
-            setIndex((i) => i + 1);
-          }}
+          onDone={handleSkip}
           onSetLogged={handleSetLogged}
+          exerciseOrder={exerciseOrder}
+          onReorder={reorderExercise}
+          canReorderUp={canReorderUp}
+          canReorderDown={canReorderDown}
         />
       ) : (
         <RestStep key={index} step={step} onDone={() => setIndex((i) => i + 1)} />
@@ -261,6 +461,8 @@ export default function WorkoutRunnerPage() {
           </div>
         </div>
       </Modal>
+
+      {pendingModal}
     </div>
   );
 }
@@ -272,6 +474,10 @@ function ExerciseStep({
   onLogToggle,
   onDone,
   onSetLogged,
+  exerciseOrder,
+  onReorder,
+  canReorderUp,
+  canReorderDown,
 }: {
   step: Extract<ReturnType<typeof flattenDay>[number], { type: "exercise" }>;
   nextStep: ReturnType<typeof flattenDay>[number] | undefined;
@@ -279,7 +485,13 @@ function ExerciseStep({
   onLogToggle: () => void;
   onDone: () => void;
   onSetLogged: (set: LoggedSet) => void;
+  exerciseOrder: PlannedExercise[];
+  onReorder: (from: number, to: number) => void;
+  canReorderUp: (pos: number) => boolean;
+  canReorderDown: (pos: number) => boolean;
 }) {
+  const exPos = exerciseOrder.findIndex((e) => e.id === step.exerciseId);
+
   return (
     <div>
       <div className="card-3d rounded-[18px] bg-rubber px-5.5 py-7 text-center">
@@ -336,6 +548,30 @@ function ExerciseStep({
               Skip & log later
             </button>
           </>
+        )}
+
+        {!logging && (canReorderUp(exPos) || canReorderDown(exPos)) && (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button
+              disabled={!canReorderUp(exPos)}
+              onClick={() => onReorder(exPos, exPos - 1)}
+              className="rounded-lg border border-rubber-2 p-1.5 text-chalk-faint disabled:opacity-30"
+              aria-label="Move exercise up"
+            >
+              <IconArrowUp size={15} />
+            </button>
+            <span className="text-[10px] uppercase tracking-wide text-chalk-faint">
+              Reorder
+            </span>
+            <button
+              disabled={!canReorderDown(exPos)}
+              onClick={() => onReorder(exPos, exPos + 1)}
+              className="rounded-lg border border-rubber-2 p-1.5 text-chalk-faint disabled:opacity-30"
+              aria-label="Move exercise down"
+            >
+              <IconArrowDown size={15} />
+            </button>
+          </div>
         )}
       </div>
 

@@ -27,6 +27,9 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Stat-Fit",
   description: "Track your workout routine",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
