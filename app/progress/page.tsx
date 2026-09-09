@@ -20,6 +20,9 @@ type ProgressStats = {
   }[];
 };
 
+type BodyWeightEntry = { date: string; weight: number };
+type BodyWeightDoc = { _id?: string; entries: BodyWeightEntry[] };
+
 type LoggedSetEntry = {
   id: string;
   exerciseName: string;
@@ -48,6 +51,10 @@ export default function ProgressPage() {
   const { data: loggedData, isLoading: loggedLoading } = useQuery<{ entries: LoggedSetEntry[] }>({
     queryKey: queryKeys.loggedSets,
     queryFn: () => api.get("/api/logged-sets"),
+  });
+  const { data: bwData } = useQuery<BodyWeightDoc>({
+    queryKey: queryKeys.bodyweight,
+    queryFn: () => api.get<BodyWeightDoc>("/api/bodyweight"),
   });
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
@@ -90,6 +97,71 @@ export default function ProgressPage() {
         <StatCard label="Workouts done" value={String(s.workoutsDone)} />
         <StatCard label="Current streak" value={`${s.streakDays} days`} accent />
       </div>
+
+      {(() => {
+        const bwEntries = bwData?.entries ?? [];
+        if (bwEntries.length === 0) return null;
+        const weights = bwEntries.map((e) => e.weight);
+        const current = weights[weights.length - 1];
+        const first = weights[0];
+        const min = Math.min(...weights);
+        const max = Math.max(...weights);
+        const change = current - first;
+        const recent = bwEntries.slice(-8);
+        const bwMax = Math.max(...recent.map((e) => e.weight));
+        const bwMin = Math.min(...recent.map((e) => e.weight));
+        const range = bwMax - bwMin || 1;
+
+        return (
+          <div className="card-3d mb-2 rounded-[14px] bg-rubber p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs text-chalk-faint">Body weight</p>
+              <span
+                className={`rounded-md px-2 py-0.5 font-mono text-[11px] font-bold ${
+                  change > 0
+                    ? "bg-plate-red/15 text-[#E8B923]"
+                    : change < 0
+                      ? "bg-plate-green/15 text-[#5DCAA5]"
+                      : "bg-rubber-2 text-chalk-faint"
+                }`}
+              >
+                {change > 0 ? "▲" : change < 0 ? "▼" : "—"} {change > 0 ? "+" : ""}
+                {change.toFixed(1)}
+              </span>
+            </div>
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-[10px] uppercase text-chalk-faint">Current</p>
+                <p className="font-mono text-[15px] font-bold text-chalk">{current}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-chalk-faint">Low</p>
+                <p className="font-mono text-[15px] font-bold text-[#5DCAA5]">{min}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-chalk-faint">High</p>
+                <p className="font-mono text-[15px] font-bold text-plate-yellow">{max}</p>
+              </div>
+            </div>
+            <div className="mt-2 flex h-[60px] items-end gap-1.5">
+              {recent.map((entry, i) => {
+                const pct = ((entry.weight - bwMin) / range) * 100;
+                return (
+                  <div key={entry.date} className="relative flex-1">
+                    <div
+                      className="rounded-t bg-plate-blue"
+                      style={{ height: `${Math.max(pct, 8)}%` }}
+                    />
+                    <span className="absolute -bottom-4 left-0 right-0 text-center font-mono text-[9px] text-chalk-faint">
+                      {entry.date.slice(5)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="card-3d mb-2 rounded-[14px] bg-rubber p-4">
         <p className="mb-3 text-xs text-chalk-faint">This week</p>

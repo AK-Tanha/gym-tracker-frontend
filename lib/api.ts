@@ -35,6 +35,7 @@ export const queryKeys = {
   progress: ["progress"] as const,
   loggedSets: ["logged-sets"] as const,
   adminUsers: ["admin", "users"] as const,
+  bodyweight: ["bodyweight"] as const,
 };
 
 export function useApiQuery<T>(url: string, options?: Partial<UseQueryOptions<T, Error>>) {

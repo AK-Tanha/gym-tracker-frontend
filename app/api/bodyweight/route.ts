@@ -24,6 +24,13 @@ export async function POST(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = (await request.json()) as BodyWeightEntry;
+    if (typeof body.weight !== "number" || body.weight <= 0 || body.weight > 999) {
+      return NextResponse.json({ error: "Invalid weight" }, { status: 400 });
+    }
+    if (typeof body.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+      return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+    }
+
     const col = await getCollection("bodyweight");
     const docId = stringIdFilter(userScopedId("bodyweight", userId));
     const doc = await col.findOne(docId);

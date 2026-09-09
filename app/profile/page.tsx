@@ -2,7 +2,7 @@
 
 import {
   IconScale,
-  IconPhoto,
+  // IconPhoto,
   IconBell,
   IconRuler2,
   IconCalendarTime,
@@ -93,10 +93,15 @@ export default function ProfilePage() {
   };
 
   const submitWeight = async (weight: number, date: string) => {
-    await logWeight.mutateAsync({ weight, date });
-    queryClient.invalidateQueries({ queryKey: queryKeys.progress });
-    setLoggingWeight(false);
-    showToast(`Logged ${weight}${profile.units}`);
+    try {
+      await logWeight.mutateAsync({ weight, date });
+      queryClient.invalidateQueries({ queryKey: queryKeys.progress });
+      queryClient.invalidateQueries({ queryKey: ["bodyweight"] });
+      setLoggingWeight(false);
+      showToast(`Logged ${weight}${profile.units}`);
+    } catch {
+      showToast("Failed to save weight — try again");
+    }
   };
 
   return (
@@ -131,7 +136,7 @@ export default function ProfilePage() {
 
       <SectionLabel>Body tracking</SectionLabel>
       <Row icon={IconScale} label="Log today's weight" chevron onClick={() => setLoggingWeight(true)} />
-      <Row icon={IconPhoto} label="Progress photos" chevron onClick={() => showToast("Opening photo gallery...")} />
+      {/* <Row icon={IconPhoto} label="Progress photos" chevron onClick={() => showToast("Opening photo gallery...")} /> */}
 
       <SectionLabel>Preferences</SectionLabel>
       <Row
