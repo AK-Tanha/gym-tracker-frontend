@@ -1,6 +1,5 @@
-const CACHE_NAME = "statfit-static-v1";
+const CACHE_NAME = "statfit-static-v2";
 const STATIC_ASSETS = [
-  "/",
   "/icon-192x192.png",
   "/icon-512x512.png",
   "/apple-touch-icon.png",
@@ -34,6 +33,13 @@ self.addEventListener("fetch", (event) => {
   if (request.url.includes("/api/")) {
     event.respondWith(
       fetch(request).catch(() => new Response(null, { status: 503 }))
+    );
+    return;
+  }
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request))
     );
     return;
   }
