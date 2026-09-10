@@ -7,11 +7,15 @@ export function Modal({
   open,
   onClose,
   title,
+  headerAction,
+  headerBelow,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  headerAction?: React.ReactNode;
+  headerBelow?: React.ReactNode;
   children: React.ReactNode;
 }) {
   useEffect(() => {
@@ -35,14 +39,22 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="card-3d max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-rubber px-5 pb-8 pt-4 sm:rounded-2xl"
+        className="card-3d max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-rubber px-5 pb-8 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <p className="font-display text-lg font-semibold text-chalk">{title}</p>
-          <button onClick={onClose} aria-label="Close">
-            <IconX size={20} className="text-chalk-faint" />
-          </button>
+        <div className="sticky top-0 z-10 -mx-5 bg-rubber px-5 pt-4">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <p className="truncate font-display text-lg font-semibold text-chalk">
+                {title}
+              </p>
+              {headerAction}
+            </div>
+            <button onClick={onClose} aria-label="Close" className="ml-2 shrink-0">
+              <IconX size={20} className="text-chalk-faint" />
+            </button>
+          </div>
+          {headerBelow}
         </div>
         {children}
       </div>

@@ -9,6 +9,7 @@ import {
   IconArrowUp,
   IconArrowDown,
   IconAlertTriangle,
+  IconReorder,
 } from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
 import { Program, ExecutionStep, PlannedExercise } from "@/lib/types";
@@ -16,6 +17,11 @@ import { flattenDay } from "@/lib/flattenDay";
 import { getTodaysWorkout } from "@/lib/todayWorkout";
 import LogSetForm, { LoggedSet } from "@/components/forms/LogSetForm";
 import { Modal } from "@/components/forms/Modal";
+import {
+  saveWorkoutState,
+  loadWorkoutState,
+  clearWorkoutState,
+} from "@/lib/workoutPersist";
 
 export default function WorkoutRunnerPage() {
   const router = useRouter();
@@ -27,22 +33,43 @@ export default function WorkoutRunnerPage() {
 
   const todaysWorkout = getTodaysWorkout(activeProgram);
 
-  const [exerciseOrder, setExerciseOrder] = useState<PlannedExercise[]>(
-    () => todaysWorkout?.exercises ?? []
-  );
-  const [queue, setQueue] = useState<ExecutionStep[]>(() =>
-    todaysWorkout ? flattenDay(todaysWorkout.exercises) : []
-  );
-  const [index, setIndex] = useState(0);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showReorder, setShowReorder] = useState(false);
+
+  const [exerciseOrder, setExerciseOrder] = useState<PlannedExercise[]>(() => {
+    const saved = loadWorkoutState();
+    if (saved) return saved.exerciseOrder;
+    return todaysWorkout?.exercises ?? [];
+  });
+  const [queue, setQueue] = useState<ExecutionStep[]>(() => {
+    const saved = loadWorkoutState();
+    if (saved) return saved.queue;
+    return todaysWorkout ? flattenDay(todaysWorkout.exercises) : [];
+  });
+  const [index, setIndex] = useState(() => {
+    const saved = loadWorkoutState();
+    return saved?.index ?? 0;
+  });
   const [logging, setLogging] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
   const [showPending, setShowPending] = useState(false);
   const [pendingIdx, setPendingIdx] = useState<number | null>(null);
   const loggedSetsRef = useRef<LoggedSet[]>([]);
-  const [pendingSets, setPendingSets] = useState<ExecutionStep[]>([]);
-  const [completedSets, setCompletedSets] = useState<Set<string>>(
-    () => new Set()
-  );
+  const [pendingSets, setPendingSets] = useState<ExecutionStep[]>(() => {
+    const saved = loadWorkoutState();
+    return saved?.pendingSets ?? [];
+  });
+  const [completedSets, setCompletedSets] = useState<Set<string>>(() => {
+    const saved = loadWorkoutState();
+    return new Set(saved?.completedSets ?? []);
+  });
+
+  useEffect(() => {
+    const saved = loadWorkoutState();
+    if (saved?.loggedSets) {
+      loggedSetsRef.current = saved.loggedSets;
+    }
+  }, []);
   const stepKey = useCallback(
     (s: ExecutionStep | undefined) =>
       s?.type === "exercise" ? `${s.exerciseId}:${s.setNumber}` : "",
@@ -101,22 +128,29 @@ export default function WorkoutRunnerPage() {
       setExerciseOrder(next);
       const currentStep = queue[index];
       if (currentStep?.type !== "exercise") return;
-      if (dir === -1) {
-        rebuildQueue(next, currentStep);
-        return;
-      }
+      const currentPos = exerciseOrder.findIndex(
+        (e) => e.id === currentStep.exerciseId
+      );
+      if (currentPos < 0) return;
+      let targetExercise: PlannedExercise | undefined;
       let targetSet = 1;
-      const target = neighbour[0];
-      while (
-        targetSet <= target.sets &&
-        completedSets.has(`${target.id}:${targetSet}`)
-      )
-        targetSet++;
+      for (let p = currentPos; p < next.length; p++) {
+        const ex = next[p];
+        for (let s = 1; s <= ex.sets; s++) {
+          if (!completedSets.has(`${ex.id}:${s}`)) {
+            targetExercise = ex;
+            targetSet = s;
+            break;
+          }
+        }
+        if (targetExercise) break;
+      }
+      if (!targetExercise) return;
       rebuildQueue(next, {
         type: "exercise",
-        exerciseId: target.id,
+        exerciseId: targetExercise.id,
         setNumber: targetSet,
-        totalSets: target.sets,
+        totalSets: targetExercise.sets,
       } as ExecutionStep);
     },
     [exerciseOrder, queue, index, rebuildQueue, groupSpan, completedSets]
@@ -202,11 +236,12 @@ export default function WorkoutRunnerPage() {
         set.unit = step.unit ?? "reps";
       }
       loggedSetsRef.current.push(set);
+      persistLoggedSets([set]);
       setCompletedSets((prev) => new Set(prev).add(stepKey(step)));
       setLogging(false);
       setIndex((i) => i + 1);
     },
-    [step, stepKey]
+    [step, stepKey, persistLoggedSets]
   );
 
   const handleSkip = useCallback(() => {
@@ -242,6 +277,11 @@ export default function WorkoutRunnerPage() {
   }, []);
 
   const hasPending = pendingSets.length > 0;
+
+  const handleEndWorkout = useCallback(() => {
+    clearWorkoutState();
+    router.push("/dashboard");
+  }, [router]);
 
   const pendingModal = (
     <Modal
@@ -319,8 +359,21 @@ export default function WorkoutRunnerPage() {
   useEffect(() => {
     if (queue.length > 0 && index >= queue.length) {
       persistLoggedSets(loggedSetsRef.current);
+      clearWorkoutState();
     }
   }, [index, queue.length, persistLoggedSets]);
+
+  useEffect(() => {
+    if (queue.length === 0) return;
+    saveWorkoutState({
+      index,
+      completedSets: Array.from(completedSets),
+      pendingSets,
+      exerciseOrder,
+      queue,
+      loggedSets: loggedSetsRef.current,
+    });
+  }, [index, completedSets, pendingSets, exerciseOrder, queue]);
 
   if (isLoading) {
     return (
@@ -404,7 +457,7 @@ export default function WorkoutRunnerPage() {
         <span className="font-mono text-xs text-chalk-faint">
           {(todaysWorkout?.dayLabel ?? "").toUpperCase()}
         </span>
-        <button onClick={() => router.push("/dashboard")} aria-label="End workout">
+        <button onClick={() => setShowEndConfirm(true)} aria-label="End workout">
           <IconX size={20} className="text-chalk-faint" />
         </button>
       </div>
@@ -450,10 +503,6 @@ export default function WorkoutRunnerPage() {
           onLogToggle={() => setLogging((l) => !l)}
           onDone={handleSkip}
           onSetLogged={handleSetLogged}
-          exerciseOrder={exerciseOrder}
-          onReorder={reorderExercise}
-          canReorderUp={canReorderUp}
-          canReorderDown={canReorderDown}
         />
       ) : (
         <RestStep key={index} step={step} onDone={() => setIndex((i) => i + 1)} />
@@ -461,61 +510,160 @@ export default function WorkoutRunnerPage() {
 
       <Modal
         open={showOverview}
-        onClose={() => setShowOverview(false)}
-        title="Today's workout"
-      >
-        <div className="flex flex-col gap-4">
-          {overview.map((g) => (
-            <div key={g.id}>
+        onClose={() => {
+          setShowOverview(false);
+          setShowReorder(false);
+        }}
+        title={showReorder ? "Reorder exercises" : "Today's workout"}
+        headerAction={
+          showReorder ? (
+            <button
+              onClick={() => setShowReorder(false)}
+              className="flex items-center gap-1 rounded-full border border-plate-green/40 bg-plate-green/10 px-2.5 py-1 text-[11px] font-semibold text-plate-green transition-colors hover:border-plate-green hover:bg-plate-green hover:text-white"
+            >
+              Done
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowReorder(true)}
+              className="flex items-center gap-1 rounded-full border border-rubber-2 px-2.5 py-1 text-[11px] font-semibold text-chalk-dim transition-colors hover:border-plate-yellow hover:text-plate-yellow"
+            >
+              <IconReorder size={12} />
+              Reorder
+            </button>
+          )
+        }
+        headerBelow={
+          !showReorder ? (
+            <div className="mb-4 rounded-[10px] bg-rubber-2 px-3.5 py-3">
               <div className="mb-2 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-chalk">{g.name}</p>
-                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-chalk-faint">
-                    {g.muscleGroup}
-                  </p>
-                </div>
-                {g.groupLabel && (
-                  <span className="font-mono text-[10px] font-bold text-plate-yellow">
-                    {g.groupLabel}
-                  </span>
-                )}
+                <span className="text-[11px] uppercase tracking-wide text-chalk-faint">
+                  Progress
+                </span>
+                <span className="font-mono text-[11px] font-bold text-[#5DCAA5]">
+                  {doneSets}/{totalSets} sets · {progressPct}%
+                </span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {g.sets.map((set) => {
-                  const done = completedSets.has(
-                    `${set.exerciseId}:${set.setNumber}`
-                  );
-                  const current = set.index === index && !done;
-                  return (
-                    <span
-                      key={set.index}
-                      className={`rounded-md px-2.5 py-1.5 font-mono text-[11px] font-bold ${
-                        done
-                          ? "bg-plate-green text-white"
-                          : current
-                            ? "border border-plate-yellow text-plate-yellow"
-                            : "bg-rubber-2 text-chalk-faint"
-                      }`}
-                    >
-                      {set.setNumber}/{set.totalSets}
-                    </span>
-                  );
-                })}
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-rubber">
+                <div
+                  className="h-full rounded-full bg-plate-green transition-all duration-300"
+                  style={{ width: `${progressPct}%` }}
+                />
               </div>
             </div>
-          ))}
-          <div className="mt-1 flex items-center justify-between border-t border-rubber-2 pt-3">
-            <span className="text-[11px] uppercase tracking-wide text-chalk-faint">
-              Progress
-            </span>
-            <span className="font-mono text-[11px] font-bold text-[#5DCAA5]">
-              {doneSets}/{totalSets} sets · {progressPct}%
-            </span>
+          ) : undefined
+        }
+      >
+        {showReorder ? (
+          <div className="flex flex-col gap-2">
+            {exerciseOrder.map((ex, pos) => {
+              const canUp = canReorderUp(pos);
+              const canDown = canReorderDown(pos);
+              return (
+                <div
+                  key={ex.id}
+                  className="flex items-center justify-between rounded-[10px] bg-rubber-2 px-3.5 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-chalk">
+                      {ex.name}
+                    </p>
+                    <p className="font-mono text-[10px] uppercase tracking-wide text-chalk-faint">
+                      {ex.sets} sets · {ex.muscleGroup}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      disabled={!canUp}
+                      onClick={() => reorderExercise(pos, pos - 1)}
+                      className="rounded-lg border border-rubber-2 p-1.5 text-chalk-faint disabled:opacity-30"
+                      aria-label="Move up"
+                    >
+                      <IconArrowUp size={15} />
+                    </button>
+                    <button
+                      disabled={!canDown}
+                      onClick={() => reorderExercise(pos, pos + 1)}
+                      className="rounded-lg border border-rubber-2 p-1.5 text-chalk-faint disabled:opacity-30"
+                      aria-label="Move down"
+                    >
+                      <IconArrowDown size={15} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {overview.map((g) => (
+              <div key={g.id}>
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-chalk">{g.name}</p>
+                    <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-chalk-faint">
+                      {g.muscleGroup}
+                    </p>
+                  </div>
+                  {g.groupLabel && (
+                    <span className="font-mono text-[10px] font-bold text-plate-yellow">
+                      {g.groupLabel}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {g.sets.map((set) => {
+                    const done = completedSets.has(
+                      `${set.exerciseId}:${set.setNumber}`
+                    );
+                    const current = set.index === index && !done;
+                    return (
+                      <span
+                        key={set.index}
+                        className={`rounded-md px-2.5 py-1.5 font-mono text-[11px] font-bold ${
+                          done
+                            ? "bg-plate-green text-white"
+                            : current
+                              ? "border border-plate-yellow text-plate-yellow"
+                              : "bg-rubber-2 text-chalk-faint"
+                        }`}
+                      >
+                        {set.setNumber}/{set.totalSets}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
 
       {pendingModal}
+
+      <Modal
+        open={showEndConfirm}
+        onClose={() => setShowEndConfirm(false)}
+        title="End workout?"
+      >
+        <p className="mb-5 text-sm text-chalk-faint">
+          You still have {totalSets - doneSets} set{totalSets - doneSets === 1 ? "" : "s"} remaining. Are you sure you want to end this workout?
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowEndConfirm(false)}
+            className="flex-1 rounded-[10px] border border-rubber-2 py-3 text-sm font-semibold text-chalk"
+          >
+            Keep going
+          </button>
+          <button
+            onClick={handleEndWorkout}
+            className="flex-1 rounded-[10px] bg-plate-red py-3 text-sm font-semibold text-white"
+          >
+            End workout
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -527,10 +675,6 @@ function ExerciseStep({
   onLogToggle,
   onDone,
   onSetLogged,
-  exerciseOrder,
-  onReorder,
-  canReorderUp,
-  canReorderDown,
 }: {
   step: Extract<ReturnType<typeof flattenDay>[number], { type: "exercise" }>;
   nextStep: ReturnType<typeof flattenDay>[number] | undefined;
@@ -538,13 +682,7 @@ function ExerciseStep({
   onLogToggle: () => void;
   onDone: () => void;
   onSetLogged: (set: LoggedSet) => void;
-  exerciseOrder: PlannedExercise[];
-  onReorder: (from: number, to: number) => void;
-  canReorderUp: (pos: number) => boolean;
-  canReorderDown: (pos: number) => boolean;
 }) {
-  const exPos = exerciseOrder.findIndex((e) => e.id === step.exerciseId);
-
   return (
     <div>
       <div className="card-3d rounded-[18px] bg-rubber px-5.5 py-7 text-center">
@@ -601,30 +739,6 @@ function ExerciseStep({
               Skip & log later
             </button>
           </>
-        )}
-
-        {!logging && (canReorderUp(exPos) || canReorderDown(exPos)) && (
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <button
-              disabled={!canReorderUp(exPos)}
-              onClick={() => onReorder(exPos, exPos - 1)}
-              className="rounded-lg border border-rubber-2 p-1.5 text-chalk-faint disabled:opacity-30"
-              aria-label="Move exercise up"
-            >
-              <IconArrowUp size={15} />
-            </button>
-            <span className="text-[10px] uppercase tracking-wide text-chalk-faint">
-              Reorder
-            </span>
-            <button
-              disabled={!canReorderDown(exPos)}
-              onClick={() => onReorder(exPos, exPos + 1)}
-              className="rounded-lg border border-rubber-2 p-1.5 text-chalk-faint disabled:opacity-30"
-              aria-label="Move exercise down"
-            >
-              <IconArrowDown size={15} />
-            </button>
-          </div>
         )}
       </div>
 
