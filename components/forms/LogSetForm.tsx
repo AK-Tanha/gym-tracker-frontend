@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { TextInput, Select, FormButton, FieldError } from "./primitives";
 import { ExerciseUnit } from "@/lib/types";
+import { useUnits } from "@/components/UnitsProvider";
+import { fmt } from "@/lib/units";
 
 export type LoggedSet = {
   weight: number;
@@ -33,6 +35,7 @@ export default function LogSetForm({
   onDone: (set: LoggedSet) => void;
   submitting?: boolean;
 }) {
+  const { unit: weightUnit, toUnit, toKg } = useUnits();
   const [set, setSet] = useState<LoggedSet>({
     weight: suggestedWeight,
     reps: suggestedReps,
@@ -41,6 +44,7 @@ export default function LogSetForm({
     rpe: null,
     notes: "",
   });
+  const [weightInput, setWeightInput] = useState(() => fmt(toUnit(suggestedWeight)));
   const [error, setError] = useState<string | null>(null);
 
   const submit = (e: React.FormEvent) => {
@@ -54,20 +58,22 @@ export default function LogSetForm({
       setError("Enter seconds completed.");
       return;
     }
-    onDone({ ...set, unit });
+    const w = parseFloat(weightInput);
+    onDone({ ...set, weight: Number.isNaN(w) ? 0 : toKg(w) });
     setSet({ ...EMPTY, unit });
+    setWeightInput("");
   };
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3">
         <TextInput
-          label="Weight (kg)"
+          label={`Weight (${weightUnit})`}
           type="number"
           min={0}
           step="0.5"
-          value={set.weight}
-          onChange={(e) => setSet((s) => ({ ...s, weight: parseFloat(e.target.value) || 0 }))}
+          value={weightInput}
+          onChange={(e) => setWeightInput(e.target.value)}
         />
         {unit === "reps" ? (
           <TextInput

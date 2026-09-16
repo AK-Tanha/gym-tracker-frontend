@@ -15,6 +15,7 @@ import { getTodaysWorkout, todayName } from "@/lib/todayWorkout";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Modal } from "@/components/forms/Modal";
+import { useUnits } from "@/components/UnitsProvider";
 
 type LoggedEntry = {
   exerciseName: string;
@@ -32,9 +33,9 @@ type ProgressStats = {
   recentPRs: {
     name: string;
     when: string;
-    value: string;
-    previous: string;
-    improvement: string;
+    valueKg: number;
+    previousKg: number;
+    improvementKg: number;
   }[];
 };
 
@@ -67,6 +68,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const [confirmRedo, setConfirmRedo] = useState(false);
+  const { unit, display } = useUnits();
   const authName = session?.user?.name ?? "Athlete";
   const isAdmin = session?.user?.role === "superadmin";
   const { data: activeProgram, isLoading: programLoading } = useQuery<Program>({
@@ -223,8 +225,8 @@ export default function DashboardPage() {
                     <p className="text-sm font-medium text-chalk">{ex.name}</p>
                     <p className="mt-0.5 font-mono text-xs text-chalk-faint">
                       {ex.unit === "time"
-                        ? `${ex.weight > 0 ? `${ex.weight}kg × ` : ""}${ex.duration}s · ${ex.sets} sets`
-                        : `${ex.weight}kg × ${ex.reps} reps · ${ex.sets} sets`}
+                        ? `${ex.weight > 0 ? `${display(ex.weight)}${unit} × ` : ""}${ex.duration}s · ${ex.sets} sets`
+                        : `${display(ex.weight)}${unit} × ${ex.reps} reps · ${ex.sets} sets`}
                     </p>
                   </div>
                   {ex.groupLabel && (

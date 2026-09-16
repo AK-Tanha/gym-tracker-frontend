@@ -20,24 +20,16 @@ export function Modal({
 }) {
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", handler);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
       <div
         className="card-3d max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-rubber px-5 pb-8 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}

@@ -10,6 +10,7 @@ import WorkoutDayForm from "@/components/forms/WorkoutDayForm";
 import { FormButton } from "@/components/forms/primitives";
 import { DAY_NAMES, sortWorkoutDays } from "@/lib/todayWorkout";
 import { IconPlus, IconPencil, IconTrash, IconChevronDown } from "@tabler/icons-react";
+import { useUnits } from "@/components/UnitsProvider";
 
 export default function ProgramsPage() {
   const { invalidate } = useApiInvalidations();
@@ -20,6 +21,7 @@ export default function ProgramsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dayTarget, setDayTarget] = useState<{ program: Program; day?: WorkoutDay } | null>(null);
   const [viewingDay, setViewingDay] = useState<{ program: Program; day: WorkoutDay } | null>(null);
+  const { unit, display } = useUnits();
 
   const { data, isLoading } = useQuery<{ myWorkouts: Program[] }>({
     queryKey: queryKeys.programs,
@@ -118,7 +120,19 @@ export default function ProgramsPage() {
           <p className="text-xs text-chalk-faint">No programs yet.</p>
         )}
         {myWorkouts.map((w) => (
-          <div key={w.id} className="card-3d rounded-[14px] bg-rubber px-4.5 py-4">
+          <div
+            key={w.id}
+            className="card-3d rounded-[14px] bg-rubber px-4.5 py-4"
+            onClick={() => setExpanded(expanded === w.id ? null : w.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setExpanded(expanded === w.id ? null : w.id);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
             <div className="mb-1 flex items-center justify-between">
               <p className="font-display text-[17px] font-semibold text-chalk">
                 {w.name}
@@ -130,7 +144,10 @@ export default function ProgramsPage() {
               </p>
               <div className="flex gap-1">
                 <button
-                  onClick={() => setExpanded(expanded === w.id ? null : w.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded(expanded === w.id ? null : w.id);
+                  }}
                   aria-label="Toggle workout days"
                   className="rounded-md p-1.5 text-chalk-faint hover:text-chalk"
                 >
@@ -140,14 +157,20 @@ export default function ProgramsPage() {
                   />
                 </button>
                 <button
-                  onClick={() => setEditing(w)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditing(w);
+                  }}
                   aria-label="Edit program"
                   className="rounded-md p-1.5 text-chalk-faint hover:text-chalk"
                 >
                   <IconPencil size={16} />
                 </button>
                 <button
-                  onClick={() => setDeleting(w)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleting(w);
+                  }}
                   aria-label="Delete program"
                   className="rounded-md p-1.5 text-chalk-faint hover:text-plate-red"
                 >
@@ -163,7 +186,10 @@ export default function ProgramsPage() {
                 {w.daysPerWeek} days/week · {(w.workoutDays ?? []).length} built days
               </span>
               <button
-                onClick={() => activate(w.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  activate(w.id);
+                }}
                 className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold ${
                   w.isActive
                     ? "bg-plate-green text-white"
@@ -181,7 +207,10 @@ export default function ProgramsPage() {
                     Workout days
                   </p>
                   <button
-                    onClick={() => setDayTarget({ program: w })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDayTarget({ program: w });
+                    }}
                     className="flex items-center gap-1 rounded-lg bg-plate-red px-2.5 py-1.5 text-[11px] font-semibold text-white"
                   >
                     <IconPlus size={13} /> Add day
@@ -198,7 +227,10 @@ export default function ProgramsPage() {
                           className="card-3d flex items-center justify-between rounded-[10px] bg-rubber px-3 py-2"
                         >
                           <button
-                            onClick={() => setViewingDay({ program: w, day })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingDay({ program: w, day });
+                            }}
                             className="flex flex-1 items-center justify-between text-left"
                           >
                             <div>
@@ -217,14 +249,20 @@ export default function ProgramsPage() {
                           </button>
                           <div className="flex gap-1">
                             <button
-                              onClick={() => setDayTarget({ program: w, day })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDayTarget({ program: w, day });
+                              }}
                               className="rounded-md p-1.5 text-chalk-faint hover:text-chalk"
                               aria-label="Edit day"
                             >
                               <IconPencil size={15} />
                             </button>
                             <button
-                              onClick={() => deleteDay(w, day.dayOfWeek)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteDay(w, day.dayOfWeek);
+                              }}
                               className="rounded-md p-1.5 text-chalk-faint hover:text-plate-red"
                               aria-label="Delete day"
                             >
@@ -300,8 +338,8 @@ export default function ProgramsPage() {
                         <p className="text-sm font-medium text-chalk">{ex.name}</p>
                         <p className="mt-0.5 font-mono text-xs text-chalk-faint">
                           {ex.unit === "time"
-                            ? `${ex.weight > 0 ? `${ex.weight}kg × ` : ""}${ex.duration}s · ${ex.sets} sets`
-                            : `${ex.weight}kg × ${ex.reps} reps · ${ex.sets} sets`}
+                            ? `${ex.weight > 0 ? `${display(ex.weight)}${unit} × ` : ""}${ex.duration}s · ${ex.sets} sets`
+                            : `${display(ex.weight)}${unit} × ${ex.reps} reps · ${ex.sets} sets`}
                         </p>
                       </div>
                       {ex.groupLabel && (

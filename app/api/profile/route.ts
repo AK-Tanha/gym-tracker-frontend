@@ -8,7 +8,6 @@ const defaultProfile = {
   initials: "AT",
   reminders: true,
   units: "kg",
-  schedule: "Weekday",
 };
 
 function monthYear(date: Date | string | undefined) {

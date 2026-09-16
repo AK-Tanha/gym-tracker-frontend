@@ -5,7 +5,6 @@ import {
   // IconPhoto,
   IconBell,
   IconRuler2,
-  IconCalendarTime,
   IconLogout,
   IconChevronRight,
   IconUserEdit,
@@ -21,6 +20,7 @@ import { Modal } from "@/components/forms/Modal";
 import EditProfileForm, { ProfileInput } from "@/components/forms/EditProfileForm";
 import BodyWeightForm from "@/components/forms/BodyWeightForm";
 import InstallAppButton from "@/components/InstallAppButton";
+import { toKg, fmt, WeightUnit } from "@/lib/units";
 
 type Profile = {
   name: string;
@@ -28,7 +28,6 @@ type Profile = {
   initials: string;
   reminders: boolean;
   units: string;
-  schedule: string;
 };
 
 export default function ProfilePage() {
@@ -58,7 +57,6 @@ export default function ProfilePage() {
       .toUpperCase(),
     reminders: true,
     units: authUser?.units ?? "kg",
-    schedule: "Weekday",
   };
 
   const displayName = profile.name || authUser?.name || "Athlete";
@@ -94,11 +92,12 @@ export default function ProfilePage() {
 
   const submitWeight = async (weight: number, date: string) => {
     try {
-      await logWeight.mutateAsync({ weight, date });
+      const unit: WeightUnit = profile.units === "lbs" ? "lbs" : "kg";
+      await logWeight.mutateAsync({ weight: toKg(weight, unit), date });
       queryClient.invalidateQueries({ queryKey: queryKeys.progress });
       queryClient.invalidateQueries({ queryKey: ["bodyweight"] });
       setLoggingWeight(false);
-      showToast(`Logged ${weight}${profile.units}`);
+      showToast(`Logged ${fmt(weight)}${profile.units}`);
     } catch {
       showToast("Failed to save weight — try again");
     }
@@ -151,15 +150,6 @@ export default function ProfilePage() {
         value={profile.units}
         onClick={() => update({ units: profile.units === "kg" ? "lbs" : "kg" })}
       />
-      <Row
-        icon={IconCalendarTime}
-        label="Schedule type"
-        value={profile.schedule}
-        onClick={() =>
-          update({ schedule: profile.schedule === "Weekday" ? "Weekend" : "Weekday" })
-        }
-      />
-
       <SectionLabel>Account</SectionLabel>
       {authUser?.role === "superadmin" && (
         <Row

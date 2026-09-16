@@ -22,6 +22,7 @@ import {
   loadWorkoutState,
   clearWorkoutState,
 } from "@/lib/workoutPersist";
+import { useUnits } from "@/components/UnitsProvider";
 
 export default function WorkoutRunnerPage() {
   const router = useRouter();
@@ -683,6 +684,7 @@ function ExerciseStep({
   onDone: () => void;
   onSetLogged: (set: LoggedSet) => void;
 }) {
+  const { unit, display } = useUnits();
   return (
     <div>
       <div className="card-3d rounded-[18px] bg-rubber px-5.5 py-7 text-center">
@@ -699,8 +701,8 @@ function ExerciseStep({
             <>
               {step.weight ? (
                 <>
-                  {step.weight}
-                  <span className="text-xl text-chalk-faint">kg</span> ×{" "}
+                  {display(step.weight)}
+                  <span className="text-xl text-chalk-faint">{unit}</span> ×{" "}
                 </>
               ) : null}
               {step.duration}
@@ -708,8 +710,8 @@ function ExerciseStep({
             </>
           ) : (
             <>
-              {step.weight}
-              <span className="text-xl text-chalk-faint">kg</span> × {step.reps}
+              {display(step.weight ?? 0)}
+              <span className="text-xl text-chalk-faint">{unit}</span> × {step.reps}
               <span className="text-xl text-chalk-faint">reps</span>
             </>
           )}

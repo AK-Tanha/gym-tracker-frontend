@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { IconChevronDown } from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
+import { useUnits } from "@/components/UnitsProvider";
 
 type ProgressStats = {
   workoutsDone: number;
@@ -14,9 +15,9 @@ type ProgressStats = {
   recentPRs: {
     name: string;
     when: string;
-    value: string;
-    previous: string;
-    improvement: string;
+    valueKg: number;
+    previousKg: number;
+    improvementKg: number;
   }[];
 };
 
@@ -57,6 +58,7 @@ export default function ProgressPage() {
     queryFn: () => api.get<BodyWeightDoc>("/api/bodyweight"),
   });
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const { unit, display } = useUnits();
 
   const byDate = useMemo(() => {
     const map = new Map<string, LoggedSetEntry[]>();
@@ -126,25 +128,25 @@ export default function ProgressPage() {
                 }`}
               >
                 {change > 0 ? "▲" : change < 0 ? "▼" : "—"} {change > 0 ? "+" : ""}
-                {change.toFixed(1)}
+                {display(change)} {unit}
               </span>
             </div>
             <div className="mb-3 grid grid-cols-3 gap-2">
               <div>
                 <p className="text-[10px] uppercase text-chalk-faint">Current</p>
-                <p className="font-mono text-[15px] font-bold text-chalk">{current}</p>
+                <p className="font-mono text-[15px] font-bold text-chalk">{display(current)} {unit}</p>
               </div>
               <div>
                 <p className="text-[10px] uppercase text-chalk-faint">Low</p>
-                <p className="font-mono text-[15px] font-bold text-[#5DCAA5]">{min}</p>
+                <p className="font-mono text-[15px] font-bold text-[#5DCAA5]">{display(min)} {unit}</p>
               </div>
               <div>
                 <p className="text-[10px] uppercase text-chalk-faint">High</p>
-                <p className="font-mono text-[15px] font-bold text-plate-yellow">{max}</p>
+                <p className="font-mono text-[15px] font-bold text-plate-yellow">{display(max)} {unit}</p>
               </div>
             </div>
             <div className="mt-2 flex h-[60px] items-end gap-1.5">
-              {recent.map((entry, i) => {
+              {recent.map((entry) => {
                 const pct = ((entry.weight - bwMin) / range) * 100;
                 return (
                   <div key={entry.date} className="relative flex-1">
@@ -186,7 +188,7 @@ export default function ProgressPage() {
                 {s.chartExercise} · weekly max
               </p>
               <span className="font-mono text-[11px] font-bold text-plate-yellow">
-                {best}kg best
+                {display(best)}{unit} best
               </span>
             </div>
             <div className="mb-3 flex items-center gap-1.5">
@@ -200,7 +202,7 @@ export default function ProgressPage() {
                 }`}
               >
                 {change > 0 ? "▲" : change < 0 ? "▼" : "—"} {change > 0 ? "+" : ""}
-                {change}kg
+                {display(change)}{unit}
               </span>
               <span className="text-[11px] text-chalk-faint">
                 from week 1 to week {s.chartBars.length}
@@ -214,7 +216,7 @@ export default function ProgressPage() {
                     style={{ height: `${bar.height}%` }}
                   />
                   <span className="absolute -top-4 left-0 right-0 text-center font-mono text-[9px] text-chalk-dim">
-                    {bar.weight > 0 ? bar.weight : ""}
+                    {bar.weight > 0 ? display(bar.weight) : ""}
                   </span>
                   <span className="absolute -bottom-4.5 left-0 right-0 text-center font-mono text-[10px] text-chalk-faint">
                     W{i + 1}
@@ -242,14 +244,14 @@ export default function ProgressPage() {
             <div className="flex items-center gap-2.5">
               <div className="text-right">
                 <p className="font-mono text-[15px] font-bold text-plate-yellow">
-                  {pr.value}
+                  {display(pr.valueKg)}{unit}
                 </p>
                 <p className="font-mono text-[10px] text-chalk-faint">
-                  prev {pr.previous}
+                  prev {display(pr.previousKg)}{unit}
                 </p>
               </div>
               <span className="rounded-md bg-plate-green/15 px-2 py-1 font-mono text-[10px] font-bold text-[#5DCAA5]">
-                {pr.improvement}
+                +{display(pr.improvementKg)}{unit}
               </span>
             </div>
           </div>
@@ -324,9 +326,9 @@ export default function ProgressPage() {
                               <span className="font-mono text-[12px] font-bold text-chalk">
                                 {set.unit === "time"
                                   ? set.weight > 0
-                                    ? `${set.weight}kg × ${set.duration}s`
+                                    ? `${display(set.weight)}${unit} × ${set.duration}s`
                                     : `${set.duration}s`
-                                  : `${set.weight}kg × ${set.reps} reps`}
+                                  : `${display(set.weight)}${unit} × ${set.reps} reps`}
                               </span>
                               <span className="font-mono text-[10px] text-chalk-faint">
                                 {set.rpe ? `RPE ${set.rpe}` : ""}

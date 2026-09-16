@@ -14,6 +14,7 @@ export type PlannedExercise = {
   reps: number;
   duration: number;
   weight: number;
+  isFreeWeight?: boolean;
   restBetweenSets: number;
   restBetweenReps: number;
   notes?: string;

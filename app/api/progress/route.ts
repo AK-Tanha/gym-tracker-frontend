@@ -17,6 +17,14 @@ type LoggedSetEntry = {
   date: string;
 };
 
+type RecentPR = {
+  name: string;
+  when: string;
+  valueKg: number;
+  previousKg: number;
+  improvementKg: number;
+};
+
 const DAY_INDEX = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const EMPTY_RESPONSE = {
@@ -105,8 +113,7 @@ export async function GET() {
       bar.height = chartMax > 0 ? Math.round((bar.weight / chartMax) * 100) : 0;
     }
 
-    const recentPRs: { name: string; when: string; value: string; previous: string; improvement: string }[] =
-    [];
+    const recentPRs: RecentPR[] = [];
     if (workoutDates.length > 0) {
       const sorted = workoutDates;
       const priorMax = new Map<string, number>();
@@ -128,9 +135,9 @@ export async function GET() {
           recentPRs.push({
             name,
             when,
-            value: `${w}kg`,
-            previous: `${prev}kg`,
-            improvement: `+${w - prev}kg`,
+            valueKg: w,
+            previousKg: prev,
+            improvementKg: w - prev,
           });
         }
       }

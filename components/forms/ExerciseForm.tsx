@@ -2,9 +2,23 @@
 
 import { useState } from "react";
 import { PlannedExercise, ExerciseType, ExerciseUnit } from "@/lib/types";
-import { TextInput, Select, FormButton, FieldError, StepperInput } from "./primitives";
-import { IconPlus, IconTrash, IconPencil, IconArrowUp, IconArrowDown, IconCopy } from "@tabler/icons-react";
+import {
+  TextInput,
+  Select,
+  FormButton,
+  FieldError,
+  StepperInput,
+} from "./primitives";
+import {
+  IconPlus,
+  IconTrash,
+  IconPencil,
+  IconArrowUp,
+  IconArrowDown,
+  IconCopy,
+} from "@tabler/icons-react";
 import { suggestionsFor } from "@/lib/exerciseLibrary";
+import { useUnits } from "@/components/UnitsProvider";
 
 export type ExerciseDraft = Omit<PlannedExercise, "id">;
 
@@ -66,16 +80,21 @@ export default function ExerciseForm({
           reps: initial.reps,
           duration: initial.duration ?? 60,
           weight: initial.weight,
+          isFreeWeight: initial.isFreeWeight ?? false,
           restBetweenSets: initial.restBetweenSets,
           restBetweenReps: initial.restBetweenReps,
           notes: initial.notes ?? "",
         }
-      : EMPTY_EXERCISE
+      : EMPTY_EXERCISE,
   );
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { unit, toUnit, toKg, stepFromKg } = useUnits();
 
-  const set = <K extends keyof ExerciseDraft>(key: K, value: ExerciseDraft[K]) => {
+  const set = <K extends keyof ExerciseDraft>(
+    key: K,
+    value: ExerciseDraft[K],
+  ) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setError(null);
   };
@@ -98,7 +117,7 @@ export default function ExerciseForm({
     onChange({
       ...draft,
       id: editingId ?? uid(),
-      groupId: isGrouped ? draft.groupId ?? `g-${uid()}` : null,
+      groupId: isGrouped ? (draft.groupId ?? `g-${uid()}`) : null,
       name: draft.name.trim(),
       muscleGroup: draft.muscleGroup.trim() || "General",
       notes: (draft.notes ?? "").trim() || undefined,
@@ -187,16 +206,38 @@ export default function ExerciseForm({
           />
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 items-start gap-3">
         <StepperInput
-          label="Weight (kg)"
+          label={`Weight (${unit})`}
           min={0}
-          step={2.5}
-          format={(n) => (Number.isInteger(n) ? String(n) : n.toFixed(1))}
-          value={draft.weight}
-          onChange={(n) => set("weight", n)}
+          step={stepFromKg(2.5)}
+          format={(n) => {
+            const r = Math.round(n * 10) / 10;
+            return Number.isInteger(r) ? String(r) : r.toFixed(1);
+          }}
+          value={draft.isFreeWeight ? 0 : toUnit(draft.weight)}
+          onChange={(n) => {
+            if (!draft.isFreeWeight) set("weight", toKg(n) || 0);
+          }}
         />
-        <div />
+      <div className="flex items-center self-end pb-3">
+        <input
+          id="isFreeWeight"
+          type="checkbox"
+          checked={draft.isFreeWeight}
+          onChange={(e) => {
+            set("isFreeWeight", e.target.checked);
+            if (e.target.checked) set("weight", 0);
+          }}
+          className="h-4 w-4 accent-plate-red"
+        />
+        <label
+          htmlFor="isFreeWeight"
+          className="select-none ms-2 text-sm font-medium text-heading"
+        >
+          Free weight
+        </label>
+      </div>
       </div>
       <div>
         <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-chalk-dim">
@@ -247,7 +288,12 @@ export default function ExerciseForm({
         />
       )}
       <FieldError error={error} />
-      <FormButton type="button" variant="success" className="mt-1" onClick={submit}>
+      <FormButton
+        type="button"
+        variant="success"
+        className="mt-1"
+        onClick={submit}
+      >
         <IconPlus size={16} /> {isEditing ? "Update exercise" : "Add exercise"}
       </FormButton>
     </div>
@@ -269,6 +315,7 @@ export function ExerciseList({
 }) {
   const iconBtn =
     "rounded-md p-1.5 text-chalk-faint transition hover:text-chalk disabled:opacity-30 disabled:hover:text-chalk-faint";
+  const { unit, display } = useUnits();
 
   return (
     <div className="flex flex-col gap-2">
@@ -279,17 +326,21 @@ export function ExerciseList({
         >
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-chalk">{ex.name}</p>
+              <p className="truncate text-sm font-medium text-chalk">
+                {ex.name}
+              </p>
               <p className="mt-0.5 font-mono text-[11px] text-chalk-faint">
                 {ex.muscleGroup} ·{" "}
                 {ex.unit === "time"
-                  ? `${ex.weight > 0 ? `${ex.weight}kg · ` : ""}${ex.duration}s hold`
-                  : `${ex.weight}kg × ${ex.reps} reps`}{" "}
+                  ? `${ex.weight > 0 ? `${display(ex.weight)}${unit} · ` : ""}${ex.duration}s hold`
+                  : `${display(ex.weight)}${unit} × ${ex.reps} reps`}{" "}
                 · {ex.sets} sets
                 {ex.groupLabel ? ` · ${ex.groupLabel}` : ""}
               </p>
               {ex.notes && (
-                <p className="mt-1 text-[11px] italic text-chalk-dim">{ex.notes}</p>
+                <p className="mt-1 text-[11px] italic text-chalk-dim">
+                  {ex.notes}
+                </p>
               )}
             </div>
             <div
