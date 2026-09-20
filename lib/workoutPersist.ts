@@ -20,6 +20,7 @@ export type PersistedWorkout = {
   exerciseOrder: PlannedExercise[];
   queue: ExecutionStep[];
   loggedSets: LoggedSet[];
+  syncedIds: string[];
 };
 
 export function saveWorkoutState(state: Omit<PersistedWorkout, "date">) {

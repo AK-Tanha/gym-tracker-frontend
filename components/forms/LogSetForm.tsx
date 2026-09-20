@@ -7,6 +7,7 @@ import { useUnits } from "@/components/UnitsProvider";
 import { fmt } from "@/lib/units";
 
 export type LoggedSet = {
+  id?: string;
   weight: number;
   reps: number;
   duration: number;

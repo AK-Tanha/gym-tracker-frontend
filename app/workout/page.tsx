@@ -56,6 +56,7 @@ export default function WorkoutRunnerPage() {
   const [showPending, setShowPending] = useState(false);
   const [pendingIdx, setPendingIdx] = useState<number | null>(null);
   const loggedSetsRef = useRef<LoggedSet[]>([]);
+  const syncedIdsRef = useRef<Set<string>>(new Set());
   const [pendingSets, setPendingSets] = useState<ExecutionStep[]>(() => {
     const saved = loadWorkoutState();
     return saved?.pendingSets ?? [];
@@ -69,6 +70,9 @@ export default function WorkoutRunnerPage() {
     const saved = loadWorkoutState();
     if (saved?.loggedSets) {
       loggedSetsRef.current = saved.loggedSets;
+    }
+    if (saved?.syncedIds) {
+      syncedIdsRef.current = new Set(saved.syncedIds);
     }
   }, []);
   const stepKey = useCallback(
@@ -199,12 +203,15 @@ export default function WorkoutRunnerPage() {
     .length;
   const progressPct = totalSets > 0 ? Math.round((doneSets / totalSets) * 100) : 0;
 
-  const persistLoggedSets = useCallback(async (sets: LoggedSet[]) => {
-    if (sets.length === 0) return;
-    try {
+  const newLoggedId = () =>
+    `ls-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const persistLoggedSets = useCallback(
+    async (sets: LoggedSet[]) => {
+      if (sets.length === 0) return;
       const today = new Date().toISOString().slice(0, 10);
-      const entries = sets.map((s, i) => ({
-        id: `ls-${Date.now()}-${i}`,
+      const entries = sets.map((s) => ({
+        id: s.id ?? newLoggedId(),
         exerciseId: "",
         exerciseName: s.exerciseName ?? "",
         muscleGroup: s.muscleGroup ?? "",
@@ -217,13 +224,17 @@ export default function WorkoutRunnerPage() {
         notes: s.notes,
         date: today,
       }));
-      await api.post("/api/logged-sets", { entries });
-      queryClient.invalidateQueries({ queryKey: queryKeys.progress });
-      queryClient.invalidateQueries({ queryKey: queryKeys.loggedSets });
-    } catch {
-      // silently fail — sets are still tracked locally
-    }
-  }, [queryClient]);
+      try {
+        await api.post("/api/logged-sets", { entries });
+        entries.forEach((e) => syncedIdsRef.current.add(e.id));
+        queryClient.invalidateQueries({ queryKey: queryKeys.progress });
+        queryClient.invalidateQueries({ queryKey: queryKeys.loggedSets });
+      } catch {
+        // silently fail — sets stay unsynced and are retried when the workout ends
+      }
+    },
+    [queryClient]
+  );
 
   const step = queue[index];
   const nextStep = queue[index + 1];
@@ -236,6 +247,7 @@ export default function WorkoutRunnerPage() {
         set.setNumber = step.setNumber;
         set.unit = step.unit ?? "reps";
       }
+      if (!set.id) set.id = newLoggedId();
       loggedSetsRef.current.push(set);
       persistLoggedSets([set]);
       setCompletedSets((prev) => new Set(prev).add(stepKey(step)));
@@ -263,6 +275,7 @@ export default function WorkoutRunnerPage() {
         set.setNumber = pendingStep.setNumber;
         set.unit = pendingStep.unit ?? "reps";
       }
+      if (!set.id) set.id = newLoggedId();
       loggedSetsRef.current.push(set);
       setCompletedSets((prev) => new Set(prev).add(stepKey(pendingStep)));
       setPendingSets((prev) => prev.filter((_, i) => i !== pendingIdx));
@@ -359,7 +372,10 @@ export default function WorkoutRunnerPage() {
 
   useEffect(() => {
     if (queue.length > 0 && index >= queue.length) {
-      persistLoggedSets(loggedSetsRef.current);
+      const unsynced = loggedSetsRef.current.filter(
+        (s) => !syncedIdsRef.current.has(s.id ?? "")
+      );
+      persistLoggedSets(unsynced);
       clearWorkoutState();
     }
   }, [index, queue.length, persistLoggedSets]);
@@ -373,6 +389,7 @@ export default function WorkoutRunnerPage() {
       exerciseOrder,
       queue,
       loggedSets: loggedSetsRef.current,
+      syncedIds: Array.from(syncedIdsRef.current),
     });
   }, [index, completedSets, pendingSets, exerciseOrder, queue]);
 

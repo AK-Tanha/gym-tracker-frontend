@@ -31,19 +31,21 @@ export async function GET() {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
     const userId = await currentAthleteId();
     if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const { searchParams } = new URL(request.url);
+    const targetDate =
+      searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
     const col = await getCollection("logged-sets");
     const docId = stringIdFilter(userScopedId("logged-sets", userId));
     const doc = await col.findOne(docId);
     const entries = (doc?.entries ?? []) as LoggedSetEntry[];
     await col.updateOne(
       docId,
-      { $set: { entries: entries.filter((e) => e.date !== today) } },
+      { $set: { entries: entries.filter((e) => e.date !== targetDate) } },
       { upsert: true }
     );
     return NextResponse.json({ success: true });
@@ -59,13 +61,20 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as { entries: LoggedSetEntry[] };
     const col = await getCollection("logged-sets");
-    await col.updateOne(
-      stringIdFilter(userScopedId("logged-sets", userId)),
-      {
-        $push: { entries: { $each: body.entries } },
-      } as unknown as Parameters<typeof col.updateOne>[1],
-      { upsert: true }
-    );
+    const docId = stringIdFilter(userScopedId("logged-sets", userId));
+    const doc = await col.findOne(docId);
+    const entries = (doc?.entries ?? []) as LoggedSetEntry[];
+    const existingIds = new Set(entries.map((e) => e.id));
+    const toPush = body.entries.filter((e) => !e.id || !existingIds.has(e.id));
+    if (toPush.length > 0) {
+      await col.updateOne(
+        docId,
+        {
+          $push: { entries: { $each: toPush } },
+        } as unknown as Parameters<typeof col.updateOne>[1],
+        { upsert: true }
+      );
+    }
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Failed to save logged sets" }, { status: 500 });
