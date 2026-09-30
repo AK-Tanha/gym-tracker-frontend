@@ -12,7 +12,7 @@ import {
   IconReorder,
 } from "@tabler/icons-react";
 import { api, queryKeys } from "@/lib/api";
-import { Program, ExecutionStep, PlannedExercise } from "@/lib/types";
+import { Program, ExecutionStep, PlannedExercise, ExerciseUnit } from "@/lib/types";
 import { flattenDay } from "@/lib/flattenDay";
 import { getTodaysWorkout } from "@/lib/todayWorkout";
 import LogSetForm, { LoggedSet } from "@/components/forms/LogSetForm";
@@ -24,6 +24,72 @@ import {
 } from "@/lib/workoutPersist";
 import { useUnits } from "@/components/UnitsProvider";
 
+type HistoryEntry = {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  muscleGroup: string;
+  setNumber: number;
+  unit: ExerciseUnit;
+  weight: number;
+  reps: number;
+  duration: number;
+  rpe: number | null;
+  notes: string;
+  date: string;
+};
+
+type Carry = { weight: number; reps: number; duration: number; date: string };
+
+/**
+ * Last set logged per exercise across previous sessions. Keeps the most recent
+ * session's final set, so Saturday's bicep curl carries into next Saturday's.
+ * Entries are matched on exerciseId, falling back to name for rows logged
+ * before exerciseId was persisted.
+ */
+function buildHistory(
+  entries: HistoryEntry[] | undefined,
+  today: string
+): Record<string, Carry> {
+  const byId: Record<string, HistoryEntry[]> = {};
+  const byName: Record<string, HistoryEntry[]> = {};
+
+  for (const e of entries ?? []) {
+    if (!e.date || e.date >= today) continue;
+    if (e.exerciseId) (byId[e.exerciseId] ??= []).push(e);
+    if (e.exerciseName) (byName[e.exerciseName.toLowerCase()] ??= []).push(e);
+  }
+
+  const latestOf = (list: HistoryEntry[]): HistoryEntry | undefined => {
+    let bestDate = "";
+    let best: HistoryEntry | undefined;
+    for (const e of list) {
+      if (e.date > bestDate || (e.date === bestDate && e.setNumber > (best?.setNumber ?? 0))) {
+        bestDate = e.date;
+        best = e;
+      }
+    }
+    return best;
+  };
+
+  const map: Record<string, Carry> = {};
+  for (const [id, list] of Object.entries(byId)) {
+    const best = latestOf(list);
+    if (best) map[id] = { weight: best.weight, reps: best.reps, duration: best.duration, date: best.date };
+  }
+  for (const [name, list] of Object.entries(byName)) {
+    const best = latestOf(list);
+    if (best) map[name] = { weight: best.weight, reps: best.reps, duration: best.duration, date: best.date };
+  }
+  return map;
+}
+
+function shortDate(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return date;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export default function WorkoutRunnerPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -33,6 +99,11 @@ export default function WorkoutRunnerPage() {
   });
 
   const todaysWorkout = getTodaysWorkout(activeProgram);
+
+  const { data: loggedDoc } = useQuery<{ entries: HistoryEntry[] }>({
+    queryKey: queryKeys.loggedSets,
+    queryFn: () => api.get("/api/logged-sets"),
+  });
 
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showReorder, setShowReorder] = useState(false);
@@ -212,7 +283,7 @@ export default function WorkoutRunnerPage() {
       const today = new Date().toISOString().slice(0, 10);
       const entries = sets.map((s) => ({
         id: s.id ?? newLoggedId(),
-        exerciseId: "",
+        exerciseId: s.exerciseId ?? "",
         exerciseName: s.exerciseName ?? "",
         muscleGroup: s.muscleGroup ?? "",
         setNumber: s.setNumber ?? 0,
@@ -239,22 +310,81 @@ export default function WorkoutRunnerPage() {
   const step = queue[index];
   const nextStep = queue[index + 1];
 
+  // Past sessions per exercise, so this week's values start where last week's
+  // finished rather than at the plan's saved numbers.
+  const history = useMemo(
+    () => buildHistory(loggedDoc?.entries, new Date().toISOString().slice(0, 10)),
+    [loggedDoc]
+  );
+
+  // Carry-over: the most recent values actually logged for an exercise in this
+  // session, so the next set starts from what you lifted rather than the plan.
+  const [carryOver, setCarryOver] = useState<Record<string, LoggedSet>>(() => {
+    const saved = loadWorkoutState();
+    const map: Record<string, LoggedSet> = {};
+    for (const s of saved?.loggedSets ?? []) {
+      if (s.exerciseId) map[s.exerciseId] = s;
+    }
+    return map;
+  });
+
+  const rememberCarry = useCallback((exerciseId: string, set: LoggedSet) => {
+    setCarryOver((prev) => ({ ...prev, [exerciseId]: { ...set, exerciseId } }));
+  }, []);
+
+  const stepSuggestions = useCallback(
+    (s: Extract<ExecutionStep, { type: "exercise" }>) => {
+      const session = carryOver[s.exerciseId];
+      if (session) {
+        return {
+          weight: session.weight,
+          reps: session.reps,
+          duration: session.duration,
+          source: "session" as const,
+          date: "",
+        };
+      }
+      const past =
+        history[s.exerciseId] ??
+        history[s.exerciseName.toLowerCase()];
+      if (past) {
+        return {
+          weight: past.weight,
+          reps: past.reps,
+          duration: past.duration,
+          source: "history" as const,
+          date: past.date,
+        };
+      }
+      return {
+        weight: s.weight ?? 0,
+        reps: s.reps ?? 0,
+        duration: s.duration ?? 0,
+        source: "plan" as const,
+        date: "",
+      };
+    },
+    [carryOver, history]
+  );
+
   const handleSetLogged = useCallback(
     (set: LoggedSet) => {
       if (step?.type === "exercise") {
+        set.exerciseId = step.exerciseId;
         set.exerciseName = step.exerciseName;
         set.muscleGroup = step.muscleGroup;
         set.setNumber = step.setNumber;
         set.unit = step.unit ?? "reps";
       }
       if (!set.id) set.id = newLoggedId();
+      if (step?.type === "exercise") rememberCarry(step.exerciseId, set);
       loggedSetsRef.current.push(set);
       persistLoggedSets([set]);
       setCompletedSets((prev) => new Set(prev).add(stepKey(step)));
       setLogging(false);
       setIndex((i) => i + 1);
     },
-    [step, stepKey, persistLoggedSets]
+    [step, stepKey, persistLoggedSets, rememberCarry]
   );
 
   const handleSkip = useCallback(() => {
@@ -270,19 +400,21 @@ export default function WorkoutRunnerPage() {
       if (pendingIdx === null) return;
       const pendingStep = pendingSets[pendingIdx];
       if (pendingStep?.type === "exercise") {
+        set.exerciseId = pendingStep.exerciseId;
         set.exerciseName = pendingStep.exerciseName;
         set.muscleGroup = pendingStep.muscleGroup;
         set.setNumber = pendingStep.setNumber;
         set.unit = pendingStep.unit ?? "reps";
       }
       if (!set.id) set.id = newLoggedId();
+      if (pendingStep?.type === "exercise") rememberCarry(pendingStep.exerciseId, set);
       loggedSetsRef.current.push(set);
       setCompletedSets((prev) => new Set(prev).add(stepKey(pendingStep)));
       setPendingSets((prev) => prev.filter((_, i) => i !== pendingIdx));
       setPendingIdx(null);
       persistLoggedSets([set]);
     },
-    [pendingIdx, pendingSets, persistLoggedSets, stepKey]
+    [pendingIdx, pendingSets, persistLoggedSets, stepKey, rememberCarry]
   );
 
   const dismissPending = useCallback((removeIdx: number) => {
@@ -323,10 +455,11 @@ export default function WorkoutRunnerPage() {
                       {ps.exerciseName} · Set {ps.setNumber} of {ps.totalSets}
                     </p>
                     <LogSetForm
+                      key={stepKey(ps)}
                       unit={ps.unit ?? "reps"}
-                      suggestedWeight={ps.weight ?? 0}
-                      suggestedReps={ps.reps ?? 0}
-                      suggestedDuration={ps.duration ?? 0}
+                      suggestedWeight={stepSuggestions(ps).weight}
+                      suggestedReps={stepSuggestions(ps).reps}
+                      suggestedDuration={stepSuggestions(ps).duration}
                       onDone={handleLogPending}
                     />
                     <button
@@ -518,6 +651,7 @@ export default function WorkoutRunnerPage() {
           step={step}
           nextStep={nextStep}
           logging={logging}
+          suggestions={stepSuggestions(step)}
           onLogToggle={() => setLogging((l) => !l)}
           onDone={handleSkip}
           onSetLogged={handleSetLogged}
@@ -690,6 +824,7 @@ function ExerciseStep({
   step,
   nextStep,
   logging,
+  suggestions,
   onLogToggle,
   onDone,
   onSetLogged,
@@ -697,6 +832,13 @@ function ExerciseStep({
   step: Extract<ReturnType<typeof flattenDay>[number], { type: "exercise" }>;
   nextStep: ReturnType<typeof flattenDay>[number] | undefined;
   logging: boolean;
+  suggestions: {
+    weight: number;
+    reps: number;
+    duration: number;
+    source: "session" | "history" | "plan";
+    date: string;
+  };
   onLogToggle: () => void;
   onDone: () => void;
   onSetLogged: (set: LoggedSet) => void;
@@ -716,31 +858,39 @@ function ExerciseStep({
         <p className="mb-1.5 font-mono text-[44px] font-bold text-chalk">
           {step.unit === "time" ? (
             <>
-              {step.weight ? (
+              {suggestions.weight ? (
                 <>
-                  {display(step.weight)}
+                  {display(suggestions.weight)}
                   <span className="text-xl text-chalk-faint">{unit}</span> ×{" "}
                 </>
               ) : null}
-              {step.duration}
+              {suggestions.duration}
               <span className="text-xl text-chalk-faint">s hold</span>
             </>
           ) : (
             <>
-              {display(step.weight ?? 0)}
-              <span className="text-xl text-chalk-faint">{unit}</span> × {step.reps}
+              {display(suggestions.weight)}
+              <span className="text-xl text-chalk-faint">{unit}</span> ×{" "}
+              {suggestions.reps}
               <span className="text-xl text-chalk-faint">reps</span>
             </>
           )}
         </p>
-        <p className="mb-7 text-xs text-chalk-faint">Last time: {step.lastTime}</p>
+        <p className="mb-7 text-xs text-chalk-faint">
+          {suggestions.source === "session"
+            ? "Carried over from your last set"
+            : suggestions.source === "history"
+              ? `Last time (${shortDate(suggestions.date)}): ${step.lastTime}`
+              : `Planned: ${step.lastTime}`}
+        </p>
 
         {logging ? (
           <LogSetForm
+            key={`${step.exerciseId}:${step.setNumber}`}
             unit={step.unit ?? "reps"}
-            suggestedWeight={step.weight ?? 0}
-            suggestedReps={step.reps ?? 0}
-            suggestedDuration={step.duration ?? 0}
+            suggestedWeight={suggestions.weight}
+            suggestedReps={suggestions.reps}
+            suggestedDuration={suggestions.duration}
             onDone={onSetLogged}
           />
         ) : (

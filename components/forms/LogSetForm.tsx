@@ -8,6 +8,7 @@ import { fmt } from "@/lib/units";
 
 export type LoggedSet = {
   id?: string;
+  exerciseId?: string;
   weight: number;
   reps: number;
   duration: number;

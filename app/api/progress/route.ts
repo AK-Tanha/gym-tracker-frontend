@@ -17,6 +17,16 @@ type LoggedSetEntry = {
   date: string;
 };
 
+type WorkoutDayRow = {
+  dayOfWeek: number;
+  isRestDay?: boolean;
+  exercises?: unknown[];
+};
+
+type ProgramDoc = {
+  myWorkouts?: { isActive?: boolean; workoutDays?: WorkoutDayRow[] }[];
+};
+
 type RecentPR = {
   name: string;
   when: string;
@@ -65,14 +75,28 @@ export async function GET() {
     const workoutDates = [...byDay.keys()].sort();
     const workoutsDone = workoutDates.length;
 
+    // Days the program actually schedules training. A scheduled day with no
+    // logged sets is a miss; any other day (explicit rest day, or a day the
+    // program leaves unassigned) is ignored so the streak survives it.
+    const programsCol = await getCollection("programs");
+    const programDoc = await programsCol.findOne(stringIdFilter(userScopedId("programs", userId)));
+    const activeProgram = (programDoc as ProgramDoc | null)?.myWorkouts?.find(
+      (p) => p.isActive
+    );
+    const scheduledDays = new Set(
+      (activeProgram?.workoutDays ?? [])
+        .filter((d) => !d.isRestDay)
+        .map((d) => d.dayOfWeek)
+    );
+    const hasSchedule = scheduledDays.size > 0;
+    const isScheduled = (d: Date) => !hasSchedule || scheduledDays.has(d.getUTCDay());
+
     let streakDays = 0;
     const now = new Date();
     now.setUTCHours(0, 0, 0, 0);
 
-    // If today has no logged data, step back to the most recent day that does
-    // before starting the streak count — the streak isn't broken until a day
-    // with no data is skipped.
-    if (!byDay.has(dateKey(now))) {
+    // Today is still in progress — don't count it as a miss if it has no data.
+    if (!byDay.has(dateKey(now)) && isScheduled(now)) {
       now.setUTCDate(now.getUTCDate() - 1);
     }
 
@@ -80,8 +104,10 @@ export async function GET() {
       if (byDay.has(dateKey(now))) {
         streakDays++;
         now.setUTCDate(now.getUTCDate() - 1);
-      } else {
+      } else if (isScheduled(now)) {
         break;
+      } else {
+        now.setUTCDate(now.getUTCDate() - 1);
       }
     }
 
