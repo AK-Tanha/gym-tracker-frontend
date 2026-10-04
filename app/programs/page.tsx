@@ -32,7 +32,10 @@ export default function ProgramsPage() {
   const updateProgram = useApiMutation(`/api/programs/${editing?.id ?? ""}`, "PUT");
   const deleteProgram = useApiMutation(`/api/programs/${deleting?.id ?? ""}`, "DELETE");
 
-  const myWorkouts = data?.myWorkouts ?? [];
+  const myWorkouts = [
+    ...(data?.myWorkouts ?? []).filter((p) => p.isActive),
+    ...(data?.myWorkouts ?? []).filter((p) => !p.isActive),
+  ];
 
   const persist = async (myWorkouts: Program[]) => {
     await savePrograms.mutateAsync({ myWorkouts });
