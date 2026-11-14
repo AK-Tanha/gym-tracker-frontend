@@ -23,6 +23,8 @@ import {
   clearWorkoutState,
 } from "@/lib/workoutPersist";
 import { useUnits } from "@/components/UnitsProvider";
+import { playTac } from "@/lib/sound";
+import { useAppVisible, useForegroundAlert } from "@/lib/timer";
 
 type HistoryEntry = {
   id: string;
@@ -460,6 +462,7 @@ export default function WorkoutRunnerPage() {
                       suggestedWeight={stepSuggestions(ps).weight}
                       suggestedReps={stepSuggestions(ps).reps}
                       suggestedDuration={stepSuggestions(ps).duration}
+                      autoStartTimer
                       onDone={handleLogPending}
                     />
                     <button
@@ -891,6 +894,7 @@ function ExerciseStep({
             suggestedWeight={suggestions.weight}
             suggestedReps={suggestions.reps}
             suggestedDuration={suggestions.duration}
+            autoStartTimer
             onDone={onSetLogged}
           />
         ) : (
@@ -929,57 +933,6 @@ function ExerciseStep({
 
 const CIRCUMFERENCE = 2 * Math.PI * 96;
 
-let audioCtx: AudioContext | null = null;
-
-function getAudioContext(): AudioContext | null {
-  try {
-    const Ctx =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!audioCtx) audioCtx = new Ctx();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    return audioCtx;
-  } catch {
-    return null;
-  }
-}
-
-function beep(freq: number, offset: number, duration: number, gainPeak: number) {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  const start = ctx.currentTime + offset;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = "sine";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(gainPeak, start + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(start);
-  osc.stop(start + duration + 0.02);
-}
-
-function playTac() {
-  try {
-    if ("vibrate" in navigator) navigator.vibrate(40);
-    beep(1200, 0, 0.08, 0.2);
-  } catch {
-    // audio/vibration unavailable — ignore
-  }
-}
-
-function playStrongAlert() {
-  try {
-    if ("vibrate" in navigator) navigator.vibrate([250, 120, 250, 120, 500]);
-    beep(880, 0, 0.2, 0.4);
-    beep(1174.66, 0.28, 0.32, 0.5);
-  } catch {
-    // audio/vibration unavailable — ignore
-  }
-}
-
 function RestStep({
   step,
   onDone,
@@ -989,17 +942,47 @@ function RestStep({
 }) {
   const [secondsLeft, setSecondsLeft] = useState(step.seconds);
   const [paused, setPaused] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Absolute wall-clock end time: timers throttled while the app is
+  // minimized still resolve to the correct remaining time.
+  const endAtRef = useRef(0);
+  const leftRef = useRef(step.seconds);
+  const finishedRef = useRef(false);
+  const onDoneRef = useRef(onDone);
+  const alert = useForegroundAlert();
+
+  useEffect(() => {
+    endAtRef.current = Date.now() + step.seconds * 1000;
+  }, [step.seconds]);
+
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  const finish = useCallback(() => {
+    if (finishedRef.current || step.seconds <= 0) return;
+    finishedRef.current = true;
+    alert();
+    onDoneRef.current();
+  }, [alert, step.seconds]);
+
+  const sync = useCallback(() => {
+    if (paused || finishedRef.current || !endAtRef.current) return;
+    const left = Math.max(0, Math.ceil((endAtRef.current - Date.now()) / 1000));
+    if (left !== leftRef.current) {
+      leftRef.current = left;
+      setSecondsLeft(left);
+    }
+    if (left === 0) finish();
+  }, [paused, finish]);
 
   useEffect(() => {
     if (paused) return;
-    intervalRef.current = setInterval(() => {
-      setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
-    }, 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [paused]);
+    const id = setInterval(sync, 250);
+    return () => clearInterval(id);
+  }, [paused, sync]);
+
+  // Catch up instantly when the app is foregrounded again.
+  useAppVisible(sync);
 
   useEffect(() => {
     if (paused) return;
@@ -1008,13 +991,10 @@ function RestStep({
     }
   }, [secondsLeft, paused]);
 
-  useEffect(() => {
-    if (secondsLeft === 0 && step.seconds > 0) {
-      playStrongAlert();
-      onDone();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [secondsLeft, step.seconds]);
+  const togglePause = () => {
+    if (paused) endAtRef.current = Date.now() + leftRef.current * 1000;
+    setPaused((p) => !p);
+  };
 
   const pct = secondsLeft / step.seconds;
   const offset = CIRCUMFERENCE * (1 - pct);
@@ -1059,7 +1039,7 @@ function RestStep({
 
       <div className="flex w-full gap-2.5">
         <button
-          onClick={() => setPaused((p) => !p)}
+          onClick={togglePause}
           className="flex-1 rounded-[10px] border border-rubber-2 bg-rubber py-3.5 text-sm font-semibold text-chalk"
         >
           {paused ? "Resume" : "Pause"}
