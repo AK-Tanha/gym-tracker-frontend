@@ -1,4 +1,5 @@
 let audioCtx: AudioContext | null = null;
+let limiter: DynamicsCompressorNode | null = null;
 
 function getAudioContext(): AudioContext | null {
   try {
@@ -14,20 +15,53 @@ function getAudioContext(): AudioContext | null {
   }
 }
 
-function beep(freq: number, offset: number, duration: number, gainPeak: number) {
+/**
+ * Every tone is routed through a compressor so it can be driven hard
+ * (near full scale) without clipping — that is what makes the alarm as
+ * loud as a phone ringtone.
+ */
+function getOutput(): { ctx: AudioContext; out: AudioNode } | null {
   const ctx = getAudioContext();
-  if (!ctx) return;
-  const start = ctx.currentTime + offset;
+  if (!ctx) return null;
+  if (!limiter) {
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.knee.value = 14;
+    comp.ratio.value = 14;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.3;
+    comp.connect(ctx.destination);
+    limiter = comp;
+  }
+  return { ctx, out: limiter };
+}
+
+function tone(
+  delay: number,
+  freq: number,
+  duration: number,
+  gainPeak: number,
+  type: OscillatorType = "sine"
+) {
+  const io = getOutput();
+  if (!io) return;
+  const { ctx, out } = io;
+  const start = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = "sine";
+  osc.type = type;
   osc.frequency.value = freq;
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(gainPeak, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(gainPeak, start + 0.012);
+  gain.gain.setValueAtTime(gainPeak, start + Math.max(0.02, duration - 0.04));
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(out);
   osc.start(start);
   osc.stop(start + duration + 0.02);
+}
+
+function beep(freq: number, offset: number, duration: number, gainPeak: number) {
+  tone(offset, freq, duration, gainPeak, "sine");
 }
 
 export function playTac() {
@@ -39,12 +73,29 @@ export function playTac() {
   }
 }
 
+/**
+ * Loud ringtone-style alarm: two rising triple-beeps plus a final long
+ * blast, with a matching vibration pattern.
+ */
 export function playStrongAlert() {
   try {
-    if ("vibrate" in navigator) navigator.vibrate([250, 120, 250, 120, 500]);
-    beep(880, 0, 0.2, 0.4);
-    beep(1174.66, 0.28, 0.32, 0.5);
+    if ("vibrate" in navigator) navigator.vibrate([500, 150, 500, 150, 700]);
   } catch {
-    // audio/vibration unavailable — ignore
+    // vibration unavailable — ignore
+  }
+  const notes: Array<[number, number, number]> = [
+    // [delay (s), frequency (Hz), duration (s)]
+    [0.0, 988, 0.18],
+    [0.2, 1319, 0.18],
+    [0.4, 1568, 0.24],
+    [0.85, 988, 0.18],
+    [1.05, 1319, 0.18],
+    [1.25, 1568, 0.24],
+    [1.8, 1568, 0.55],
+    [2.45, 1319, 0.55],
+  ];
+  for (const [delay, freq, duration] of notes) {
+    tone(delay, freq, duration, 0.85, "square");
+    tone(delay, freq, duration, 0.45, "sine");
   }
 }
