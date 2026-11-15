@@ -9,8 +9,9 @@ import {
   IconChevronRight,
   IconUserEdit,
   IconShield,
+  IconVolume2,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
@@ -21,6 +22,12 @@ import EditProfileForm, { ProfileInput } from "@/components/forms/EditProfileFor
 import BodyWeightForm from "@/components/forms/BodyWeightForm";
 import InstallAppButton from "@/components/InstallAppButton";
 import { toKg, fmt, WeightUnit } from "@/lib/units";
+import {
+  getAlarmVolume,
+  playVolumePreview,
+  setAlarmVolume,
+  subscribeAlarmVolume,
+} from "@/lib/sound";
 
 type Profile = {
   name: string;
@@ -150,6 +157,7 @@ export default function ProfilePage() {
         value={profile.units}
         onClick={() => update({ units: profile.units === "kg" ? "lbs" : "kg" })}
       />
+      <AlarmVolumeRow />
       <SectionLabel>Account</SectionLabel>
       {authUser?.role === "superadmin" && (
         <Row
@@ -188,6 +196,48 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="mb-2.5 mt-5 text-[13px] font-semibold text-chalk-dim first:mt-0">
       {children}
     </p>
+  );
+}
+
+function AlarmVolumeRow() {
+  const volume = useSyncExternalStore(subscribeAlarmVolume, getAlarmVolume, () => 1);
+  const pct = Math.round(volume * 100);
+
+  return (
+    <div className="card-3d mb-2 rounded-[10px] bg-rubber px-3.5 py-3.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <IconVolume2 size={18} className="text-chalk-dim" />
+          <span className="text-sm text-chalk">Alarm volume</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs text-chalk-faint">
+            {pct === 0 ? "Muted" : `${pct}%`}
+          </span>
+          <button
+            type="button"
+            onClick={() => playVolumePreview()}
+            className="rounded-lg border border-rubber-2 px-2.5 py-1 text-[11px] font-semibold text-chalk-dim"
+          >
+            Test
+          </button>
+        </div>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={pct}
+        onChange={(e) => setAlarmVolume(parseInt(e.target.value, 10) / 100)}
+        aria-label="Alarm volume"
+        className="mt-3 h-1.5 w-full accent-plate-red"
+      />
+      <p className="mt-2 text-[11px] leading-relaxed text-chalk-faint">
+        Controls the in-app rest &amp; hold alarms. Phone notifications use your
+        device&apos;s notification volume.
+      </p>
+    </div>
   );
 }
 

@@ -92,7 +92,33 @@ function shortDate(date: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+/** Same UTC day key the API writes to every logged entry. */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function WorkoutRunnerPage() {
+  const { data: loggedDoc, isError: loggedDocError } = useQuery<{
+    entries: HistoryEntry[];
+  }>({
+    queryKey: queryKeys.loggedSets,
+    queryFn: () => api.get("/api/logged-sets"),
+  });
+
+  // Today's log decides which sets are already done, so wait for it before
+  // mounting the runner — otherwise a partly logged day gets replayed.
+  if (loggedDoc === undefined && !loggedDocError) {
+    return (
+      <div className="flex h-full items-center justify-center px-5 pt-2">
+        <p className="text-sm text-chalk-faint">Loading workout…</p>
+      </div>
+    );
+  }
+
+  return <WorkoutRunner loggedEntries={loggedDoc?.entries ?? []} />;
+}
+
+function WorkoutRunner({ loggedEntries }: { loggedEntries: HistoryEntry[] }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: activeProgram, isLoading } = useQuery<Program>({
@@ -102,10 +128,15 @@ export default function WorkoutRunnerPage() {
 
   const todaysWorkout = getTodaysWorkout(activeProgram);
 
-  const { data: loggedDoc } = useQuery<{ entries: HistoryEntry[] }>({
-    queryKey: queryKeys.loggedSets,
-    queryFn: () => api.get("/api/logged-sets"),
-  });
+  // Sets already logged for today's date — never ask for them again.
+  const todaysEntries = useMemo(
+    () => loggedEntries.filter((e) => e.date === todayISO() && e.exerciseId),
+    [loggedEntries]
+  );
+  const todaysLogged = useMemo(
+    () => new Set(todaysEntries.map((e) => `${e.exerciseId}:${e.setNumber}`)),
+    [todaysEntries]
+  );
 
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showReorder, setShowReorder] = useState(false);
@@ -122,7 +153,16 @@ export default function WorkoutRunnerPage() {
   });
   const [index, setIndex] = useState(() => {
     const saved = loadWorkoutState();
-    return saved?.index ?? 0;
+    if (saved) return saved.index;
+    // Fresh start: resume at the first set today's log doesn't have yet, so
+    // finishing (or reopening) a day can't replay it and log everything twice.
+    let pos = 0;
+    while (pos < queue.length) {
+      const s = queue[pos];
+      if (s.type === "exercise" && !todaysLogged.has(`${s.exerciseId}:${s.setNumber}`)) break;
+      pos++;
+    }
+    return pos;
   });
   const [logging, setLogging] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
@@ -136,8 +176,24 @@ export default function WorkoutRunnerPage() {
   });
   const [completedSets, setCompletedSets] = useState<Set<string>>(() => {
     const saved = loadWorkoutState();
-    return new Set(saved?.completedSets ?? []);
+    if (saved) return new Set(saved.completedSets ?? []);
+    const done = new Set<string>();
+    for (const s of queue) {
+      if (s.type === "exercise" && todaysLogged.has(`${s.exerciseId}:${s.setNumber}`)) {
+        done.add(`${s.exerciseId}:${s.setNumber}`);
+      }
+    }
+    return done;
   });
+
+  // Duplicate-log guard. Built lazily and only read inside handlers/effects
+  // (never during render), so a double tap in the same frame still sees the
+  // first tap's write.
+  const loggedKeysRef = useRef<Set<string> | null>(null);
+  const ensureLoggedKeys = useCallback(() => {
+    if (!loggedKeysRef.current) loggedKeysRef.current = new Set(completedSets);
+    return loggedKeysRef.current;
+  }, [completedSets]);
 
   useEffect(() => {
     const saved = loadWorkoutState();
@@ -279,9 +335,13 @@ export default function WorkoutRunnerPage() {
   const newLoggedId = () =>
     `ls-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
+  // Posts are serialised through one chain: two overlapping POSTs both read
+  // the same document before either writes and append the same entry twice.
+  const postChainRef = useRef<Promise<void>>(Promise.resolve());
+
   const persistLoggedSets = useCallback(
-    async (sets: LoggedSet[]) => {
-      if (sets.length === 0) return;
+    (sets: LoggedSet[]) => {
+      if (sets.length === 0) return postChainRef.current;
       const today = new Date().toISOString().slice(0, 10);
       const entries = sets.map((s) => ({
         id: s.id ?? newLoggedId(),
@@ -297,14 +357,19 @@ export default function WorkoutRunnerPage() {
         notes: s.notes,
         date: today,
       }));
-      try {
-        await api.post("/api/logged-sets", { entries });
-        entries.forEach((e) => syncedIdsRef.current.add(e.id));
-        queryClient.invalidateQueries({ queryKey: queryKeys.progress });
-        queryClient.invalidateQueries({ queryKey: queryKeys.loggedSets });
-      } catch {
-        // silently fail — sets stay unsynced and are retried when the workout ends
-      }
+      const post = async () => {
+        try {
+          await api.post("/api/logged-sets", { entries });
+          entries.forEach((e) => syncedIdsRef.current.add(e.id));
+          queryClient.invalidateQueries({ queryKey: queryKeys.progress });
+          queryClient.invalidateQueries({ queryKey: queryKeys.loggedSets });
+        } catch {
+          // silently fail — sets stay unsynced and are retried when the workout ends
+        }
+      };
+      const next = postChainRef.current.then(post, post);
+      postChainRef.current = next;
+      return next;
     },
     [queryClient]
   );
@@ -315,8 +380,8 @@ export default function WorkoutRunnerPage() {
   // Past sessions per exercise, so this week's values start where last week's
   // finished rather than at the plan's saved numbers.
   const history = useMemo(
-    () => buildHistory(loggedDoc?.entries, new Date().toISOString().slice(0, 10)),
-    [loggedDoc]
+    () => buildHistory(loggedEntries, todayISO()),
+    [loggedEntries]
   );
 
   // Carry-over: the most recent values actually logged for an exercise in this
@@ -326,6 +391,10 @@ export default function WorkoutRunnerPage() {
     const map: Record<string, LoggedSet> = {};
     for (const s of saved?.loggedSets ?? []) {
       if (s.exerciseId) map[s.exerciseId] = s;
+    }
+    // No saved session (or first set of the day) — start from today's logs.
+    for (const e of todaysEntries) {
+      if (e.exerciseId && !map[e.exerciseId]) map[e.exerciseId] = e;
     }
     return map;
   });
@@ -371,6 +440,12 @@ export default function WorkoutRunnerPage() {
 
   const handleSetLogged = useCallback(
     (set: LoggedSet) => {
+      const key = step?.type === "exercise" ? stepKey(step) : "";
+      if (key) {
+        const keys = ensureLoggedKeys();
+        if (keys.has(key)) return; // already logged — ignore the double tap
+        keys.add(key);
+      }
       if (step?.type === "exercise") {
         set.exerciseId = step.exerciseId;
         set.exerciseName = step.exerciseName;
@@ -386,7 +461,7 @@ export default function WorkoutRunnerPage() {
       setLogging(false);
       setIndex((i) => i + 1);
     },
-    [step, stepKey, persistLoggedSets, rememberCarry]
+    [step, stepKey, ensureLoggedKeys, persistLoggedSets, rememberCarry]
   );
 
   const handleSkip = useCallback(() => {
@@ -401,6 +476,12 @@ export default function WorkoutRunnerPage() {
     (set: LoggedSet) => {
       if (pendingIdx === null) return;
       const pendingStep = pendingSets[pendingIdx];
+      const key = pendingStep?.type === "exercise" ? stepKey(pendingStep) : "";
+      if (key) {
+        const keys = ensureLoggedKeys();
+        if (keys.has(key)) return; // already logged
+        keys.add(key);
+      }
       if (pendingStep?.type === "exercise") {
         set.exerciseId = pendingStep.exerciseId;
         set.exerciseName = pendingStep.exerciseName;
@@ -416,7 +497,7 @@ export default function WorkoutRunnerPage() {
       setPendingIdx(null);
       persistLoggedSets([set]);
     },
-    [pendingIdx, pendingSets, persistLoggedSets, stepKey, rememberCarry]
+    [pendingIdx, pendingSets, ensureLoggedKeys, persistLoggedSets, stepKey, rememberCarry]
   );
 
   const dismissPending = useCallback((removeIdx: number) => {
@@ -507,14 +588,23 @@ export default function WorkoutRunnerPage() {
     </Modal>
   );
 
+  const flushRef = useRef<Promise<void> | null>(null);
   useEffect(() => {
-    if (queue.length > 0 && index >= queue.length) {
-      const unsynced = loggedSetsRef.current.filter(
-        (s) => !syncedIdsRef.current.has(s.id ?? "")
-      );
-      persistLoggedSets(unsynced);
-      clearWorkoutState();
+    if (queue.length > 0 && index < queue.length) {
+      flushRef.current = null; // back in the workout — allow a later flush
+      return;
     }
+    if (queue.length === 0 || flushRef.current) return;
+    flushRef.current = (async () => {
+      // Let the final set's post land first. Flushing while it was still in
+      // flight re-sent the same entry and the server stored it twice.
+      await postChainRef.current;
+      const unsynced = loggedSetsRef.current.filter(
+        (s) => !!s.id && !syncedIdsRef.current.has(s.id)
+      );
+      await persistLoggedSets(unsynced);
+      clearWorkoutState();
+    })();
   }, [index, queue.length, persistLoggedSets]);
 
   useEffect(() => {

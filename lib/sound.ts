@@ -1,6 +1,61 @@
 let audioCtx: AudioContext | null = null;
 let limiter: DynamicsCompressorNode | null = null;
 
+// ---------------------------------------------------------------------------
+// Alarm volume (0..1), persisted per device. Applies to the in-app Web Audio
+// alarm and the countdown ticks — system notification volume is controlled by
+// the phone and cannot be changed from a web app.
+// ---------------------------------------------------------------------------
+const VOLUME_KEY = "statfit-alarm-volume";
+const DEFAULT_VOLUME = 1;
+const volumeListeners = new Set<() => void>();
+let volume = DEFAULT_VOLUME;
+
+function readStoredVolume(): number {
+  if (typeof window === "undefined" || !window.localStorage) return DEFAULT_VOLUME;
+  try {
+    const raw = window.localStorage.getItem(VOLUME_KEY);
+    if (raw === null) return DEFAULT_VOLUME;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return DEFAULT_VOLUME;
+    return Math.min(1, Math.max(0, parsed));
+  } catch {
+    return DEFAULT_VOLUME;
+  }
+}
+
+volume = readStoredVolume();
+
+export function getAlarmVolume(): number {
+  return volume;
+}
+
+export function setAlarmVolume(next: number): void {
+  const clamped = Number.isFinite(next) ? Math.min(1, Math.max(0, next)) : DEFAULT_VOLUME;
+  if (clamped === volume) return;
+  volume = clamped;
+  try {
+    window.localStorage.setItem(VOLUME_KEY, String(clamped));
+  } catch {
+    // storage unavailable — keep the in-memory value
+  }
+  volumeListeners.forEach((notify) => notify());
+}
+
+/** For useSyncExternalStore. */
+export function subscribeAlarmVolume(onStoreChange: () => void): () => void {
+  volumeListeners.add(onStoreChange);
+  return () => {
+    volumeListeners.delete(onStoreChange);
+  };
+}
+
+/** Short two-note blip so the level can be previewed while adjusting it. */
+export function playVolumePreview(): void {
+  beep(880, 0, 0.14, 0.5);
+  beep(1318.5, 0.18, 0.2, 0.5);
+}
+
 function getAudioContext(): AudioContext | null {
   try {
     const Ctx =
@@ -47,6 +102,9 @@ function tone(
   gainPeak: number,
   type: OscillatorType = "sine"
 ) {
+  const peak = gainPeak * volume;
+  // Muted — don't start an oscillator at all (a 0 gain ramp is invalid).
+  if (peak < 0.002) return;
   const io = getOutput();
   if (!io) return;
   const { ctx, out } = io;
@@ -56,8 +114,8 @@ function tone(
   osc.type = type;
   osc.frequency.value = freq;
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(gainPeak, start + 0.012);
-  gain.gain.setValueAtTime(gainPeak, start + Math.max(0.02, duration - 0.04));
+  gain.gain.exponentialRampToValueAtTime(peak, start + 0.012);
+  gain.gain.setValueAtTime(peak, start + Math.max(0.02, duration - 0.04));
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
   osc.connect(gain).connect(out);
   osc.start(start);

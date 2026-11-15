@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection, stringIdFilter, stripMongoId } from "@/lib/mongodb";
 import { currentAthleteId, userScopedId } from "@/lib/auth";
+import { dedupeEntriesById, LoggedSetEntry } from "@/lib/loggedSets";
 
-type LoggedSetEntry = {
-  id: string;
-  exerciseId: string;
-  exerciseName: string;
-  muscleGroup: string;
-  setNumber: number;
-  unit: "reps" | "time";
-  weight: number;
-  reps: number;
-  duration: number;
-  rpe: number | null;
-  notes: string;
-  date: string;
-};
+/** Rebuilds an entry with a fixed key order so identical logs compare equal. */
+function canonicalEntry(e: LoggedSetEntry): LoggedSetEntry {
+  return {
+    id: String(e.id ?? ""),
+    exerciseId: e.exerciseId ?? "",
+    exerciseName: e.exerciseName ?? "",
+    muscleGroup: e.muscleGroup ?? "",
+    setNumber: Number(e.setNumber ?? 0),
+    unit: e.unit === "time" ? "time" : "reps",
+    weight: Number(e.weight ?? 0),
+    reps: Number(e.reps ?? 0),
+    duration: Number(e.duration ?? 0),
+    rpe: e.rpe ?? null,
+    notes: e.notes ?? "",
+    date: e.date ?? "",
+  };
+}
 
 export async function GET() {
   try {
@@ -24,7 +28,10 @@ export async function GET() {
 
     const col = await getCollection("logged-sets");
     const doc = await col.findOne(stringIdFilter(userScopedId("logged-sets", userId)));
-    if (doc) return NextResponse.json(stripMongoId(doc));
+    if (doc) {
+      const entries = dedupeEntriesById((doc.entries ?? []) as LoggedSetEntry[]);
+      return NextResponse.json(stripMongoId({ ...doc, entries }));
+    }
     return NextResponse.json({ entries: [] });
   } catch {
     return NextResponse.json({ entries: [] });
@@ -65,12 +72,15 @@ export async function POST(request: NextRequest) {
     const doc = await col.findOne(docId);
     const entries = (doc?.entries ?? []) as LoggedSetEntry[];
     const existingIds = new Set(entries.map((e) => e.id));
-    const toPush = body.entries.filter((e) => !e.id || !existingIds.has(e.id));
+    // Canonical shape + $addToSet: a retry or a racing request can never
+    // append the same entry twice.
+    const incoming = (body.entries ?? []).map(canonicalEntry);
+    const toPush = incoming.filter((e) => !e.id || !existingIds.has(e.id));
     if (toPush.length > 0) {
       await col.updateOne(
         docId,
         {
-          $push: { entries: { $each: toPush } },
+          $addToSet: { entries: { $each: toPush } },
         } as unknown as Parameters<typeof col.updateOne>[1],
         { upsert: true }
       );

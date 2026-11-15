@@ -1,21 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCollection, stringIdFilter } from "@/lib/mongodb";
 import { currentAthleteId, userScopedId } from "@/lib/auth";
-
-type LoggedSetEntry = {
-  id: string;
-  exerciseId: string;
-  exerciseName: string;
-  muscleGroup: string;
-  setNumber: number;
-  unit: "reps" | "time";
-  weight: number;
-  reps: number;
-  duration: number;
-  rpe: number | null;
-  notes: string;
-  date: string;
-};
+import { dedupeEntriesById, LoggedSetEntry } from "@/lib/loggedSets";
 
 type WorkoutDayRow = {
   dayOfWeek: number;
@@ -59,7 +45,7 @@ export async function GET() {
 
     const loggedCol = await getCollection("logged-sets");
     const logged = await loggedCol.findOne(stringIdFilter(userScopedId("logged-sets", userId)));
-    const entries = (logged?.entries ?? []) as LoggedSetEntry[];
+    const entries = dedupeEntriesById((logged?.entries ?? []) as LoggedSetEntry[]);
 
     const byDay = new Map<string, { maxByExercise: Map<string, number> }>();
     for (const e of entries) {
