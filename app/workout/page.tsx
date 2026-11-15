@@ -24,7 +24,7 @@ import {
 } from "@/lib/workoutPersist";
 import { useUnits } from "@/components/UnitsProvider";
 import { playTac } from "@/lib/sound";
-import { useAppVisible, useForegroundAlert } from "@/lib/timer";
+import { useAppVisible, useTimerAlarm } from "@/lib/timer";
 
 type HistoryEntry = {
   id: string;
@@ -459,6 +459,7 @@ export default function WorkoutRunnerPage() {
                     <LogSetForm
                       key={stepKey(ps)}
                       unit={ps.unit ?? "reps"}
+                      label={ps.exerciseName}
                       suggestedWeight={stepSuggestions(ps).weight}
                       suggestedReps={stepSuggestions(ps).reps}
                       suggestedDuration={stepSuggestions(ps).duration}
@@ -891,6 +892,7 @@ function ExerciseStep({
           <LogSetForm
             key={`${step.exerciseId}:${step.setNumber}`}
             unit={step.unit ?? "reps"}
+            label={step.exerciseName}
             suggestedWeight={suggestions.weight}
             suggestedReps={suggestions.reps}
             suggestedDuration={suggestions.duration}
@@ -948,7 +950,11 @@ function RestStep({
   const leftRef = useRef(step.seconds);
   const finishedRef = useRef(false);
   const onDoneRef = useRef(onDone);
-  const alert = useForegroundAlert();
+  const alarm = useTimerAlarm({
+    active: !paused && secondsLeft > 0,
+    title: "Rest finished",
+    body: `Next up: ${step.nextExerciseName} · ${step.nextSetLabel}`,
+  });
 
   useEffect(() => {
     endAtRef.current = Date.now() + step.seconds * 1000;
@@ -961,9 +967,9 @@ function RestStep({
   const finish = useCallback(() => {
     if (finishedRef.current || step.seconds <= 0) return;
     finishedRef.current = true;
-    alert();
+    alarm();
     onDoneRef.current();
-  }, [alert, step.seconds]);
+  }, [alarm, step.seconds]);
 
   const sync = useCallback(() => {
     if (paused || finishedRef.current || !endAtRef.current) return;

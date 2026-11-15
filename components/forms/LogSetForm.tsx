@@ -6,7 +6,7 @@ import { ExerciseUnit } from "@/lib/types";
 import { useUnits } from "@/components/UnitsProvider";
 import { fmt } from "@/lib/units";
 import { playTac } from "@/lib/sound";
-import { useAppVisible, useForegroundAlert } from "@/lib/timer";
+import { useAppVisible, useTimerAlarm } from "@/lib/timer";
 
 export type LoggedSet = {
   id?: string;
@@ -38,6 +38,7 @@ export default function LogSetForm({
   onDone,
   submitting,
   autoStartTimer = false,
+  label,
 }: {
   unit?: ExerciseUnit;
   suggestedWeight: number;
@@ -46,6 +47,8 @@ export default function LogSetForm({
   onDone: (set: LoggedSet) => void;
   submitting?: boolean;
   autoStartTimer?: boolean;
+  /** Exercise name, used in the end-of-timer notification. */
+  label?: string;
 }) {
   const { unit: weightUnit, toUnit, toKg } = useUnits();
   const [set, setSet] = useState<LoggedSet>({
@@ -70,7 +73,11 @@ export default function LogSetForm({
   // Fixed wall-clock start: throttled timers in a backgrounded app still
   // resolve to the correct elapsed time.
   const startedAtRef = useRef(0);
-  const alert = useForegroundAlert();
+  const alarm = useTimerAlarm({
+    active: timed && running,
+    title: "Time's up",
+    body: label ? `${label} — hold complete` : "Hold complete",
+  });
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -100,9 +107,9 @@ export default function LogSetForm({
       finishedRef.current = true;
       setRunning(false);
       setFinished(true);
-      alert();
+      alarm();
     }
-  }, [timed, running, target, alert]);
+  }, [timed, running, target, alarm]);
 
   useEffect(() => {
     if (!running) return;

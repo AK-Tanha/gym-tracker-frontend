@@ -8,7 +8,11 @@ function getAudioContext(): AudioContext | null {
       (window as unknown as { webkitAudioContext: typeof AudioContext })
         .webkitAudioContext;
     if (!audioCtx) audioCtx = new Ctx();
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioCtx.state === "suspended") {
+      void audioCtx.resume().catch(() => {
+        // no user gesture yet — will be retried on the next call
+      });
+    }
     return audioCtx;
   } catch {
     return null;
@@ -62,6 +66,47 @@ function tone(
 
 function beep(freq: number, offset: number, duration: number, gainPeak: number) {
   tone(offset, freq, duration, gainPeak, "sine");
+}
+
+let keepAlive: { osc: OscillatorNode; gain: GainNode } | null = null;
+
+/**
+ * Starts a near-silent oscillator so the page counts as "playing audio".
+ * Chrome never freezes or intensively throttles a page that is playing
+ * audio, which keeps our wall-clock timer ticking while the screen is off —
+ * so the alarm fires at the right moment instead of when the display is
+ * turned back on. The output is ~1 Hz at -66 dB, i.e. inaudible.
+ */
+export function startSilentKeepAlive() {
+  if (keepAlive) return;
+  const io = getOutput();
+  if (!io) return;
+  try {
+    const { ctx, out } = io;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 1;
+    gain.gain.value = 0.0005;
+    osc.connect(gain).connect(out);
+    osc.start();
+    keepAlive = { osc, gain };
+  } catch {
+    keepAlive = null;
+  }
+}
+
+export function stopSilentKeepAlive() {
+  if (!keepAlive) return;
+  const { osc, gain } = keepAlive;
+  keepAlive = null;
+  try {
+    osc.stop();
+    osc.disconnect();
+    gain.disconnect();
+  } catch {
+    // already stopped — ignore
+  }
 }
 
 export function playTac() {
